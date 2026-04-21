@@ -17,12 +17,14 @@ wheels/
 *.pem
 *.key
 
-# SQLite data
+# SQLite data — the runtime data/ dir at repo root holds the SQLite DB,
+# heartbeats, pid files, etc. Anchor with a leading slash so this pattern
+# does NOT also match src/jay_trading/data/, which is source code.
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
-data/
+/data/
 
 # Logs
 logs/
