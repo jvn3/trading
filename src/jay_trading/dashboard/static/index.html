@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Jay Trading — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --panel2: #1a2430;
+    --border: #1f2a36;
+    --text: #dce3ec;
+    --dim: #8b97a6;
+    --muted: #5a6678;
+    --accent: #4fc3f7;
+    --accent2: #64ffda;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; line-height: 1.45;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(180deg, rgba(11,15,20,0.98), rgba(11,15,20,0.9));
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+  header h1 .sub { color: var(--dim); font-weight: 400; margin-left: 6px; }
+  #healthDot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted); margin-right: 6px; vertical-align: middle;
+  }
+  #healthDot.good { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  #healthDot.warn { background: var(--warn); }
+  #healthDot.bad { background: var(--bad); }
+  .meta { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+  main {
+    padding: 20px; display: grid;
+    grid-template-columns: repeat(12, 1fr); gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    min-height: 0;
+  }
+  .card h2 {
+    margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--dim); font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card h2 .badge {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.5px;
+    background: var(--panel2); color: var(--dim);
+    padding: 2px 8px; border-radius: 12px; text-transform: none;
+  }
+  .span-4 { grid-column: span 4; }
+  .span-6 { grid-column: span 6; }
+  .span-8 { grid-column: span 8; }
+  .span-12 { grid-column: span 12; }
+
+  /* Account KPIs */
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .kpi { background: var(--panel2); border-radius: 8px; padding: 12px; }
+  .kpi .label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi .value { font-size: 22px; font-weight: 600; margin-top: 4px; font-family: var(--mono); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+    white-space: nowrap; vertical-align: middle;
+  }
+  th { color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { font-family: var(--mono); }
+  td.t-name { font-family: inherit; }
+  td.num { text-align: right; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .empty { color: var(--muted); font-style: italic; padding: 14px; text-align: center; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
+    font-family: var(--mono); background: var(--panel2); color: var(--dim);
+  }
+  .pill.buy { background: rgba(74, 222, 128, 0.12); color: var(--good); }
+  .pill.sell { background: rgba(248, 113, 113, 0.12); color: var(--bad); }
+  .pill.long { background: rgba(79, 195, 247, 0.12); color: var(--accent); }
+  .pill.short { background: rgba(248, 113, 113, 0.12); color: var(--bad); }
+  .pill.senate { background: rgba(100, 255, 218, 0.10); color: var(--accent2); }
+  .pill.house { background: rgba(79, 195, 247, 0.10); color: var(--accent); }
+  .pill.insider { background: rgba(251, 191, 36, 0.10); color: var(--warn); }
+  .pos { color: var(--good); }
+  .neg { color: var(--bad); }
+  .score-bar {
+    display: inline-block; width: 60px; height: 6px; background: var(--panel2);
+    border-radius: 3px; position: relative; vertical-align: middle; margin-right: 6px;
+  }
+  .score-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .score-bar.above > span { background: var(--good); }
+  details { font-size: 12px; color: var(--dim); }
+  details summary { cursor: pointer; color: var(--accent); }
+  details summary:hover { color: var(--accent2); }
+  .log {
+    background: #0a0e13; border-radius: 6px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 11px; color: var(--dim);
+    max-height: 180px; overflow: auto; white-space: pre; line-height: 1.35;
+    border: 1px solid var(--border);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent2); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    background: var(--panel2); border-radius: 16px; padding: 4px 10px;
+    font-size: 11px; font-family: var(--mono); color: var(--dim);
+  }
+  .member-list { font-size: 11px; color: var(--dim); margin-top: 4px; }
+  .tbl-scroll { max-height: 360px; overflow-y: auto; overflow-x: auto; }
+
+  @media (max-width: 1100px) {
+    .span-4, .span-6, .span-8 { grid-column: span 12; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>
+    <span id="healthDot"></span>
+    Jay Trading <span class="sub">paper</span>
+  </h1>
+  <div class="meta">
+    <span id="acctNumber">—</span>
+    • last sync <span id="lastSync">—</span>
+    • heartbeat <span id="hbAge">—</span>
+  </div>
+</header>
+
+<main>
+  <!-- Account -->
+  <section class="card span-4">
+    <h2>Account <span id="acctStatus" class="badge">—</span></h2>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Equity</div><div class="value" id="kEquity">—</div></div>
+      <div class="kpi"><div class="label">Cash</div><div class="value" id="kCash">—</div></div>
+      <div class="kpi"><div class="label">Buying Power</div><div class="value" id="kBP">—</div></div>
+      <div class="kpi"><div class="label">Open Positions</div><div class="value" id="kPosCount">—</div></div>
+    </div>
+  </section>
+
+  <!-- Positions -->
+  <section class="card span-8">
+    <h2>Open Positions <span class="badge" id="posBadge">0</span></h2>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Strategy</th>
+            <th class="num">Qty</th>
+            <th class="num">Avg Entry</th>
+            <th class="num">Last</th>
+            <th class="num">Mkt Val</th>
+            <th class="num">P&amp;L</th>
+            <th class="num">P&amp;L %</th>
+            <th>Opened</th>
+          </tr>
+        </thead>
+        <tbody id="positionsBody"><tr><td colspan="9" class="empty">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Signals -->
+  <section class="card span-6">
+    <h2>Active Signals <span class="badge" id="sigBadge">0</span></h2>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Dir</th>
+            <th>Score</th>
+            <th>Members</th>
+            <th>Window</th>
+            <th>State</th>
+          </tr>
+        </thead>
+        <tbody id="signalsBody"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Orders -->
+  <section class="card span-6">
+    <h2>Recent Orders (7d) <span class="badge" id="ordBadge">0</span></h2>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Ticker</th>
+            <th>Side</th>
+            <th class="num">$ / Qty</th>
+            <th>Status</th>
+            <th>Fill</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Disclosures -->
+  <section class="card span-4">
+    <h2>Disclosure Counts (14d)</h2>
+    <div id="discCounts" class="row">loading…</div>
+    <h2 style="margin-top: 12px;">Top Tickers</h2>
+    <div id="topTickers" class="row">loading…</div>
+  </section>
+
+  <!-- Recent Disclosures -->
+  <section class="card span-8">
+    <h2>Recent Disclosures (14d) <span class="badge" id="discBadge">0</span></h2>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Person</th>
+            <th>Ticker</th>
+            <th>Side</th>
+            <th>Tx Date</th>
+            <th>Filed</th>
+            <th class="num">Range</th>
+          </tr>
+        </thead>
+        <tbody id="disclosuresBody"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Scheduler -->
+  <section class="card span-6">
+    <h2>Scheduler <span class="badge" id="schedState">—</span></h2>
+    <div class="row">
+      <div class="chip">pid <span id="schedPid">—</span></div>
+      <div class="chip">heartbeat age <span id="schedAge">—</span>s</div>
+    </div>
+    <div class="log" id="schedLog">—</div>
+  </section>
+
+  <!-- Briefings -->
+  <section class="card span-6">
+    <h2>Briefings &amp; Logs</h2>
+    <div style="font-size:12px; color: var(--dim); margin-bottom: 6px;">Trade logs</div>
+    <div id="tradeLogs" class="row"></div>
+    <div style="font-size:12px; color: var(--dim); margin: 10px 0 6px;">Briefings</div>
+    <div id="briefings" class="row"></div>
+  </section>
+</main>
+
+<script>
+const fmt$ = (v) => (v === null || v === undefined) ? "—" : "$" + Number(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const fmtN = (v, d=2) => (v === null || v === undefined) ? "—" : Number(v).toLocaleString(undefined, {minimumFractionDigits: d, maximumFractionDigits: d});
+const fmtPct = (v) => (v === null || v === undefined) ? "—" : (v * 100).toFixed(2) + "%";
+const fmtClock = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+};
+const fmtDateTime = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+};
+const signClass = (v) => v == null ? "" : (v > 0 ? "pos" : v < 0 ? "neg" : "");
+const signStr = (v, pct=false) => {
+  if (v == null) return "—";
+  const s = pct ? fmtPct(v) : fmt$(v);
+  return (v > 0 ? "+" : "") + s;
+};
+
+async function fetchSnapshot() {
+  const r = await fetch("/api/snapshot", {cache: "no-store"});
+  if (!r.ok) throw new Error("snapshot " + r.status);
+  return await r.json();
+}
+
+function render(s) {
+  // Account
+  const a = s.account || {};
+  document.getElementById("acctNumber").textContent = a.account_number || "—";
+  document.getElementById("acctStatus").textContent = (a.status || "—").replace(/^AccountStatus\./, "");
+  document.getElementById("kEquity").textContent = fmt$(a.equity);
+  document.getElementById("kCash").textContent = fmt$(a.cash);
+  document.getElementById("kBP").textContent = fmt$(a.buying_power);
+  document.getElementById("kPosCount").textContent = (s.positions || []).length;
+
+  // Positions
+  const pos = s.positions || [];
+  document.getElementById("posBadge").textContent = pos.length;
+  const posBody = document.getElementById("positionsBody");
+  if (!pos.length) {
+    posBody.innerHTML = `<tr><td colspan="9" class="empty">no open positions</td></tr>`;
+  } else {
+    posBody.innerHTML = pos.map(p => `
+      <tr>
+        <td class="t-name"><b>${p.ticker}</b></td>
+        <td>${p.strategy || "—"}</td>
+        <td class="num">${fmtN(p.qty, 4)}</td>
+        <td class="num">${fmt$(p.avg_entry)}</td>
+        <td class="num">${fmt$(p.current_price)}</td>
+        <td class="num">${fmt$(p.market_value)}</td>
+        <td class="num ${signClass(p.unrealized_pl)}">${signStr(p.unrealized_pl)}</td>
+        <td class="num ${signClass(p.unrealized_plpc)}">${signStr(p.unrealized_plpc, true)}</td>
+        <td>${fmtDateTime(p.opened_at)}</td>
+      </tr>
+    `).join("");
+  }
+
+  // Orders
+  const orders = s.orders || [];
+  document.getElementById("ordBadge").textContent = orders.length;
+  const ordBody = document.getElementById("ordersBody");
+  if (!orders.length) {
+    ordBody.innerHTML = `<tr><td colspan="6" class="empty">no orders in window</td></tr>`;
+  } else {
+    ordBody.innerHTML = orders.map(o => {
+      const amt = o.notional ? fmt$(o.notional) : (o.qty ? fmtN(o.qty, 4) + " sh" : "—");
+      const fill = o.filled_avg_price
+        ? `${fmtN(o.filled_qty, 4)} @ ${fmt$(o.filled_avg_price)}`
+        : "—";
+      const side = (o.side || "").toLowerCase();
+      return `<tr>
+        <td>${fmtClock(o.submitted_at)}</td>
+        <td class="t-name"><b>${o.ticker}</b></td>
+        <td><span class="pill ${side}">${side}</span></td>
+        <td class="num">${amt}</td>
+        <td>${o.status}</td>
+        <td>${fill}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Signals
+  const sigs = s.signals || [];
+  document.getElementById("sigBadge").textContent = sigs.length;
+  const sigBody = document.getElementById("signalsBody");
+  if (!sigs.length) {
+    sigBody.innerHTML = `<tr><td colspan="6" class="empty">no signals yet</td></tr>`;
+  } else {
+    sigBody.innerHTML = sigs.map(sg => {
+      const scoreW = Math.round(Math.min(1, Math.max(0, sg.score)) * 100);
+      const above = sg.score > 0.5 ? "above" : "";
+      const members = (sg.members || []).slice(0, 4).map(m => m.name).filter(Boolean).join(", ");
+      const allMembers = (sg.members || []).map(m => {
+        const q = m.quality_score != null ? ` (q=${(m.quality_score * 100).toFixed(1)}%)` : "";
+        return `• ${m.name}${q}${m.role ? " — " + m.role : ""}`;
+      }).join("\n");
+      const state = sg.acted_on ? `<span class="pill">acted</span>` : (sg.score > 0.5 ? `<span class="pill long">pending</span>` : `<span class="pill">below</span>`);
+      return `<tr>
+        <td class="t-name"><b>${sg.ticker}</b></td>
+        <td><span class="pill ${sg.direction}">${sg.direction}</span></td>
+        <td><span class="score-bar ${above}"><span style="width:${scoreW}%"></span></span>${sg.score.toFixed(2)}</td>
+        <td><div>${sg.n_members}</div><div class="member-list">${members}</div><details><summary>details</summary><pre style="font-size:11px; white-space: pre-wrap;">${allMembers}</pre></details></td>
+        <td>${sg.window_start || "—"} → ${sg.window_end || "—"}</td>
+        <td>${state}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Disclosure counts + top tickers
+  const counts = s.disclosures_counts || {};
+  document.getElementById("discCounts").innerHTML =
+    ["senate", "house", "insider"].map(k => `<div class="chip"><span class="pill ${k}">${k}</span> ${counts[k] || 0}</div>`).join("");
+  const top = s.disclosures_top_tickers || [];
+  document.getElementById("topTickers").innerHTML = top.length
+    ? top.map(t => `<div class="chip"><b>${t.ticker}</b> · ${t.n}</div>`).join("")
+    : `<div class="empty">no tickers</div>`;
+
+  // Recent disclosures
+  const disc = s.recent_disclosures || [];
+  document.getElementById("discBadge").textContent = disc.length;
+  const discBody = document.getElementById("disclosuresBody");
+  if (!disc.length) {
+    discBody.innerHTML = `<tr><td colspan="7" class="empty">no disclosures in window</td></tr>`;
+  } else {
+    discBody.innerHTML = disc.map(d => {
+      const range = (d.amount_low == null && d.amount_high == null) ? "—"
+        : (d.amount_low === d.amount_high) ? fmt$(d.amount_low)
+        : `${fmt$(d.amount_low)}–${fmt$(d.amount_high)}`;
+      return `<tr>
+        <td><span class="pill ${d.source}">${d.source}</span></td>
+        <td class="t-name">${d.person}</td>
+        <td><b>${d.ticker}</b></td>
+        <td><span class="pill ${d.side}">${d.side}</span></td>
+        <td>${d.tx_date}</td>
+        <td>${d.filing_date}</td>
+        <td class="num">${range}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Scheduler
+  const sc = s.scheduler || {};
+  const dot = document.getElementById("healthDot");
+  dot.className = sc.healthy ? "good" : (sc.alive ? "warn" : "bad");
+  document.getElementById("schedState").textContent = sc.healthy ? "healthy" : (sc.alive ? "stale" : "down");
+  document.getElementById("schedPid").textContent = sc.pid ?? "—";
+  document.getElementById("schedAge").textContent = sc.heartbeat_age_seconds ?? "—";
+  document.getElementById("hbAge").textContent = sc.heartbeat_age_seconds != null ? sc.heartbeat_age_seconds + "s" : "—";
+  document.getElementById("schedLog").textContent = (sc.log_tail || []).join("\n") || "—";
+
+  // Briefings + trade logs
+  const ts = s.trade_logs || [];
+  document.getElementById("tradeLogs").innerHTML = ts.length
+    ? ts.map(t => `<div class="chip">${t.name} · ${Math.round(t.size/100)/10} KB</div>`).join("")
+    : `<div class="empty">no trade logs yet</div>`;
+  const br = s.briefings || [];
+  document.getElementById("briefings").innerHTML = br.length
+    ? br.slice(0, 8).map(b => `<div class="chip">${b.name}</div>`).join("")
+    : `<div class="empty">no briefings yet</div>`;
+
+  document.getElementById("lastSync").textContent = fmtClock(s.generated_at);
+}
+
+async function tick() {
+  try {
+    const s = await fetchSnapshot();
+    render(s);
+  } catch (e) {
+    console.error(e);
+    document.getElementById("healthDot").className = "bad";
+    document.getElementById("lastSync").textContent = "error";
+  }
+}
+
+tick();
+setInterval(tick, 30000);
+</script>
+</body>
+</html>
