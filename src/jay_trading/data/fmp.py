@@ -64,6 +64,8 @@ ENDPOINTS: dict[str, tuple[str, ...]] = {
         "/stable/sectors-performance",
         "/api/v3/stock/sectors-performance",
     ),
+    # Fundamentals (used by insider_follow Piotroski gate + correlation cap)
+    "financial_scores": ("/stable/financial-scores",),
 }
 
 
@@ -165,18 +167,6 @@ class FMPClient:
             error_kind=None if ok else f"http_{r.status_code}",
         )
         return r
-
-
-def _log_api_call(path: str, status: str, *, latency_ms: float, error_kind: str | None) -> None:
-    """Best-effort FMP call logger. Imported lazily to dodge a circular import."""
-    try:
-        from jay_trading.data import store
-        store.record_api_call(
-            provider="fmp", endpoint=path, status=status,
-            latency_ms=latency_ms, error_kind=error_kind,
-        )
-    except Exception as e:  # noqa: BLE001
-        log.debug("api-call-log for fmp %s failed: %s", path, e)
 
     def request(self, endpoint_key: str, params: dict[str, Any] | None = None,
                 path_args: dict[str, str] | None = None) -> Any:
@@ -432,10 +422,14 @@ def normalize_insider_row(raw: dict[str, Any]) -> dict[str, Any] | None:
     filing_date = _parse_iso_date(raw.get("filingDate")) or tx_date
     if not ticker or not tx_date:
         return None
+    # ``transactionType`` (e.g. "P-Purchase", "S-Sale", "A-Award", "F-InKind",
+    # "M-Exempt") is more specific than the A/D letter. Consult it first so
+    # P-Purchase → "buy" and non-informative codes (Award, InKind, Exempt,
+    # Gift) fall through to "exchange" correctly.
     side = _normalize_side(
-        raw.get("acquistionOrDisposition")
+        raw.get("transactionType")
+        or raw.get("acquistionOrDisposition")
         or raw.get("acquisitionOrDisposition")
-        or raw.get("transactionType")
     )
     qty = raw.get("securitiesTransacted") or raw.get("transactionQuantity")
     price = raw.get("price") or raw.get("transactionPrice")
@@ -484,6 +478,22 @@ def normalize_insider_row(raw: dict[str, Any]) -> dict[str, Any] | None:
 def since_window_days(days: int) -> date:
     """Return the ``date`` ``days`` calendar days ago (UTC)."""
     return date.today() - timedelta(days=days)
+
+
+# Call tracking for the Phase 3 api_health breaker. Defined here (module level,
+# below FMPClient) so FMPClient._get can reference it without closing the class
+# body mid-definition.
+def _log_api_call(path: str, status: str, *, latency_ms: float,
+                  error_kind: str | None) -> None:
+    """Best-effort FMP call logger. Imported lazily to dodge a circular import."""
+    try:
+        from jay_trading.data import store
+        store.record_api_call(
+            provider="fmp", endpoint=path, status=status,
+            latency_ms=latency_ms, error_kind=error_kind,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.debug("api-call-log for fmp %s failed: %s", path, e)
 
 
 # Convenience: iterate normalized rows from a source name.

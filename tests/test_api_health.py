@@ -32,17 +32,17 @@ def test_summary_computes_fail_rate() -> None:
 
 
 def test_ttl_cache_respects_expiry() -> None:
-    cache = api_health.TTLCache(default_ttl_sec=0.05)
+    cache = api_health.TTLCache(default_ttl_sec=0.15)
     cache.set("x", 1)
     assert cache.get("x") == 1
-    time.sleep(0.06)
+    time.sleep(0.25)  # comfortably above Windows monotonic resolution
     assert cache.get("x") is None
 
 
 def test_ttl_cache_per_key_ttl_override() -> None:
     cache = api_health.TTLCache(default_ttl_sec=60.0)
-    cache.set("short", "v", ttl_sec=0.01)
+    cache.set("short", "v", ttl_sec=0.1)
     cache.set("long", "w")
-    time.sleep(0.02)
+    time.sleep(0.25)
     assert cache.get("short") is None
     assert cache.get("long") == "w"

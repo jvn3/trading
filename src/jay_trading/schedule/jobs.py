@@ -18,14 +18,19 @@ from jay_trading.executor import order_builder, portfolio as portfolio_mod, reco
 from jay_trading.risk import guards
 from jay_trading.risk.sizing import size_intent
 from jay_trading.signals.cluster_detector import find_clusters, upsert_signals
+from jay_trading.signals.insider_cluster_detector import (
+    find_insider_clusters,
+    upsert_insider_signals,
+)
 from jay_trading.strategies.base import SignalView
+from jay_trading.strategies.insider_follow import InsiderFollowStrategy
 from jay_trading.strategies.smart_copy import SmartCopyStrategy
 from jay_trading.vault.templates import render_data_briefing
 from jay_trading.vault.writer import write_vault_file
 
 log = logging.getLogger(__name__)
 
-STRATEGIES = [SmartCopyStrategy()]
+STRATEGIES = [SmartCopyStrategy(), InsiderFollowStrategy()]
 
 
 # -- Existing Phase 1 ingest (kept) -----------------------------------------
@@ -117,12 +122,24 @@ def ingest_disclosures(lookback_days: int = 14) -> dict[str, int]:
 
 
 def generate_signals() -> dict[str, int]:
-    """Run cluster detection and persist new Signal rows."""
+    """Run cluster detection for every strategy and persist new Signal rows."""
     create_all()
-    clusters = find_clusters()
-    inserted = upsert_signals(clusters)
-    log.info("generate_signals: %d clusters active, %d newly persisted", len(clusters), inserted)
-    return {"clusters_found": len(clusters), "signals_inserted": inserted}
+    cong_clusters = find_clusters()
+    cong_inserted = upsert_signals(cong_clusters)
+
+    ins_clusters = find_insider_clusters()
+    ins_inserted = upsert_insider_signals(ins_clusters)
+
+    log.info(
+        "generate_signals: congress=%d/%d insider=%d/%d (active/new)",
+        len(cong_clusters), cong_inserted, len(ins_clusters), ins_inserted,
+    )
+    return {
+        "congress_active": len(cong_clusters),
+        "congress_inserted": cong_inserted,
+        "insider_active": len(ins_clusters),
+        "insider_inserted": ins_inserted,
+    }
 
 
 def _unacted_signals() -> list[SignalView]:
