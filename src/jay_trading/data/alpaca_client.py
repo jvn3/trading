@@ -3,14 +3,61 @@
 The wrapper enforces paper-only routing at construction time so any future
 caller who wires the live URL in by mistake gets a loud failure instead of a
 silent live order.
+
+Every outbound call is logged to ``api_call_log`` via
+:func:`jay_trading.data.store.record_api_call`, feeding the
+``api_health`` circuit breaker in :mod:`jay_trading.risk.guards`.
 """
 from __future__ import annotations
 
-from typing import Any
+import logging
+import time
+from functools import wraps
+from typing import Any, Callable, TypeVar
 
 from alpaca.trading.client import TradingClient
 
 from jay_trading.config import get_settings
+
+log = logging.getLogger(__name__)
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _tracked(endpoint: str) -> Callable[[F], F]:
+    """Wrap an Alpaca call, logging ``ok``/``fail`` to ``api_call_log``."""
+
+    def decorator(fn: F) -> F:
+        @wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            start = time.monotonic()
+            try:
+                result = fn(*args, **kwargs)
+            except Exception as e:  # noqa: BLE001
+                _log_alpaca_call(endpoint, "fail",
+                                 latency_ms=(time.monotonic() - start) * 1000,
+                                 error_kind=type(e).__name__)
+                raise
+            _log_alpaca_call(endpoint, "ok",
+                             latency_ms=(time.monotonic() - start) * 1000,
+                             error_kind=None)
+            return result
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
+def _log_alpaca_call(endpoint: str, status: str, *, latency_ms: float,
+                     error_kind: str | None) -> None:
+    try:
+        from jay_trading.data import store
+        store.record_api_call(
+            provider="alpaca", endpoint=endpoint, status=status,
+            latency_ms=latency_ms, error_kind=error_kind,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.debug("api-call-log for alpaca %s failed: %s", endpoint, e)
 
 
 class AlpacaPaperClient:
@@ -37,6 +84,7 @@ class AlpacaPaperClient:
 
     # Account / portfolio -----------------------------------------------------
 
+    @_tracked("get_account")
     def get_account(self) -> Any:
         acct = self._client.get_account()
         if self._expected_account_id and str(acct.account_number) != self._expected_account_id:
@@ -47,9 +95,11 @@ class AlpacaPaperClient:
             )
         return acct
 
+    @_tracked("get_positions")
     def get_positions(self) -> list[Any]:
         return list(self._client.get_all_positions())
 
+    @_tracked("get_orders")
     def get_orders(self, status: str = "all", after: str | None = None) -> list[Any]:
         from alpaca.trading.requests import GetOrdersRequest
         from alpaca.trading.enums import QueryOrderStatus
@@ -58,9 +108,11 @@ class AlpacaPaperClient:
         return list(self._client.get_orders(filter=req))
 
     # Thin passthrough; order construction lives in executor.order_builder.
+    @_tracked("submit_order")
     def submit_order(self, order_request: Any) -> Any:
         return self._client.submit_order(order_request)
 
+    @_tracked("close_position")
     def close_position(self, symbol: str, qty: float | None = None) -> Any:
         from alpaca.trading.requests import ClosePositionRequest
 

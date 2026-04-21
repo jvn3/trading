@@ -147,7 +147,36 @@ class FMPClient:
     def _get(self, path: str, params: dict[str, Any]) -> httpx.Response:
         self._bucket.take(1)
         merged = {**params, "apikey": self._api_key}
-        return self._client.get(path, params=merged)
+        start = time.monotonic()
+        try:
+            r = self._client.get(path, params=merged)
+        except (httpx.TransportError, httpx.TimeoutException) as e:
+            # Log the failed attempt BEFORE tenacity retries consume this.
+            # Tenacity will re-invoke _get; each attempt gets its own row.
+            _log_api_call(
+                path, "fail", latency_ms=(time.monotonic() - start) * 1000,
+                error_kind=type(e).__name__,
+            )
+            raise
+        ok = 200 <= r.status_code < 300
+        _log_api_call(
+            path, "ok" if ok else "fail",
+            latency_ms=(time.monotonic() - start) * 1000,
+            error_kind=None if ok else f"http_{r.status_code}",
+        )
+        return r
+
+
+def _log_api_call(path: str, status: str, *, latency_ms: float, error_kind: str | None) -> None:
+    """Best-effort FMP call logger. Imported lazily to dodge a circular import."""
+    try:
+        from jay_trading.data import store
+        store.record_api_call(
+            provider="fmp", endpoint=path, status=status,
+            latency_ms=latency_ms, error_kind=error_kind,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.debug("api-call-log for fmp %s failed: %s", path, e)
 
     def request(self, endpoint_key: str, params: dict[str, Any] | None = None,
                 path_args: dict[str, str] | None = None) -> Any:
