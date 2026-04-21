@@ -22,6 +22,7 @@ from sqlalchemy import select
 
 from jay_trading.data import models
 from jay_trading.data.db import session_scope
+from jay_trading.signals import confluence
 from jay_trading.strategies.base import (
     PortfolioSnapshot,
     PositionView,
@@ -77,14 +78,16 @@ class SmartCopyStrategy(Strategy):
                 continue
             if portfolio.holds(sig.ticker):
                 continue
+            mult = confluence.multiplier_for_ticker(sig.ticker, my_strategy=self.name)
+            notional_pct = 0.05 * mult
             intents.append(
                 TradeIntent(
                     strategy_name=self.name,
                     ticker=sig.ticker,
                     side="buy",
-                    notional=round(portfolio.equity * 0.05, 2),  # sizer may cap further
+                    notional=round(portfolio.equity * notional_pct, 2),  # sizer may cap further
                     signal_id=sig.id,
-                    rationale=sig.rationale,
+                    rationale={**sig.rationale, "confluence_multiplier": mult},
                     action="open",
                 )
             )

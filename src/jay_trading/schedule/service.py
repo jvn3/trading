@@ -115,8 +115,9 @@ def build_scheduler() -> BlockingScheduler:
     # Intraday stop management
     sched.add_job(_wrapped(jobs.manage_stops), CronTrigger(hour="10-15", minute="*/15", day_of_week="mon-fri"))
 
-    # Reconcile + EOD summary
+    # Reconcile + equity snapshot + EOD summary
     sched.add_job(_wrapped(jobs.reconcile_now), CronTrigger(hour=15, minute=55, day_of_week="mon-fri"))
+    sched.add_job(_wrapped(jobs.snapshot_equity_and_prune), CronTrigger(hour=16, minute=5, day_of_week="mon-fri"))
     sched.add_job(_wrapped(jobs.write_eod_summary), CronTrigger(hour=16, minute=10, day_of_week="mon-fri"))
 
     # Heartbeat every 5 min so the watchdog can detect a stuck process.

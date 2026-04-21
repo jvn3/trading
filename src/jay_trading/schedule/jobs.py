@@ -15,16 +15,22 @@ from jay_trading.data.alpaca_client import AlpacaPaperClient
 from jay_trading.data.db import create_all, get_engine, session_scope
 from jay_trading.data.fmp import FMPClient, normalize, since_window_days
 from jay_trading.executor import order_builder, portfolio as portfolio_mod, reconcile
+from jay_trading.risk import guards
 from jay_trading.risk.sizing import size_intent
 from jay_trading.signals.cluster_detector import find_clusters, upsert_signals
+from jay_trading.signals.insider_cluster_detector import (
+    find_insider_clusters,
+    upsert_insider_signals,
+)
 from jay_trading.strategies.base import SignalView
+from jay_trading.strategies.insider_follow import InsiderFollowStrategy
 from jay_trading.strategies.smart_copy import SmartCopyStrategy
 from jay_trading.vault.templates import render_data_briefing
 from jay_trading.vault.writer import write_vault_file
 
 log = logging.getLogger(__name__)
 
-STRATEGIES = [SmartCopyStrategy()]
+STRATEGIES = [SmartCopyStrategy(), InsiderFollowStrategy()]
 
 
 # -- Existing Phase 1 ingest (kept) -----------------------------------------
@@ -116,12 +122,24 @@ def ingest_disclosures(lookback_days: int = 14) -> dict[str, int]:
 
 
 def generate_signals() -> dict[str, int]:
-    """Run cluster detection and persist new Signal rows."""
+    """Run cluster detection for every strategy and persist new Signal rows."""
     create_all()
-    clusters = find_clusters()
-    inserted = upsert_signals(clusters)
-    log.info("generate_signals: %d clusters active, %d newly persisted", len(clusters), inserted)
-    return {"clusters_found": len(clusters), "signals_inserted": inserted}
+    cong_clusters = find_clusters()
+    cong_inserted = upsert_signals(cong_clusters)
+
+    ins_clusters = find_insider_clusters()
+    ins_inserted = upsert_insider_signals(ins_clusters)
+
+    log.info(
+        "generate_signals: congress=%d/%d insider=%d/%d (active/new)",
+        len(cong_clusters), cong_inserted, len(ins_clusters), ins_inserted,
+    )
+    return {
+        "congress_active": len(cong_clusters),
+        "congress_inserted": cong_inserted,
+        "insider_active": len(ins_clusters),
+        "insider_inserted": ins_inserted,
+    }
 
 
 def _unacted_signals() -> list[SignalView]:
@@ -151,40 +169,81 @@ def _unacted_signals() -> list[SignalView]:
 
 
 def execute_strategies() -> dict[str, int]:
-    """Generate intents, size them, and submit to Alpaca paper."""
+    """Generate intents, size them, and submit to Alpaca paper.
+
+    Pipeline risk gates (daily loss / drawdown / API health / market regime)
+    are evaluated once at the top. If any trip, new entries are blocked for
+    this tick — exits still run via ``manage_stops`` on a separate schedule.
+    """
     create_all()
     signals = _unacted_signals()
     alpaca = AlpacaPaperClient()
     portfolio = portfolio_mod.build_snapshot(alpaca)
 
+    fmp = FMPClient()
+    try:
+        pipeline = guards.evaluate_pipeline_gates(
+            alpaca=alpaca, fmp=fmp, portfolio=portfolio,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("pipeline gate evaluation crashed — passing (fail-open): %s", e)
+        pipeline = guards.PipelineDecision(allow_entries=True, trips=[])
+
     submitted = 0
     rejected = 0
-    for strat in STRATEGIES:
-        if not strat.enabled:
-            continue
-        my_signals = [s for s in signals if s.strategy_name == strat.name]
-        intents = strat.generate_intents(my_signals, portfolio)
-        log.info(
-            "execute_strategies[%s]: %d raw intents from %d signals",
-            strat.name, len(intents), len(my_signals),
-        )
-        for intent in intents:
-            dec = size_intent(intent, portfolio)
-            if dec.verdict == "REJECT" or dec.intent is None:
-                rejected += 1
-                log.info("reject %s %s: %s", intent.ticker, intent.side, dec.reason)
-                store.record_risk_event(
-                    kind="sizing_veto",
-                    reason=dec.reason,
-                    strategy_name=intent.strategy_name,
-                    ticker=intent.ticker,
-                )
+    gated = 0
+
+    if not pipeline.allow_entries:
+        for gate_name, result in pipeline.trips:
+            log.warning("pipeline gate tripped: %s — %s", gate_name, result.reason)
+            store.record_risk_event(
+                kind="breaker_trip",
+                severity="halt",
+                reason=f"{gate_name}: {result.reason}",
+                payload=result.details,
+            )
+        gated = len(pipeline.trips)
+    else:
+        for strat in STRATEGIES:
+            if not strat.enabled:
                 continue
-            try:
-                order_builder.submit_intent(dec.intent, alpaca=alpaca)
-                submitted += 1
-            except Exception as e:  # noqa: BLE001
-                log.warning("submit failed for %s: %s", intent.ticker, e)
+            my_signals = [s for s in signals if s.strategy_name == strat.name]
+            intents = strat.generate_intents(my_signals, portfolio)
+            log.info(
+                "execute_strategies[%s]: %d raw intents from %d signals",
+                strat.name, len(intents), len(my_signals),
+            )
+            for intent in intents:
+                # Per-intent: sector-correlation cap
+                cor = guards.check_correlation_cap(intent, portfolio, fmp=fmp)
+                if not cor.passed:
+                    rejected += 1
+                    log.info("sector-cap reject %s: %s", intent.ticker, cor.reason)
+                    store.record_risk_event(
+                        kind="sizing_veto",
+                        severity="warn",
+                        reason=cor.reason,
+                        strategy_name=intent.strategy_name,
+                        ticker=intent.ticker,
+                        payload=cor.details,
+                    )
+                    continue
+                dec = size_intent(intent, portfolio)
+                if dec.verdict == "REJECT" or dec.intent is None:
+                    rejected += 1
+                    log.info("reject %s %s: %s", intent.ticker, intent.side, dec.reason)
+                    store.record_risk_event(
+                        kind="sizing_veto",
+                        reason=dec.reason,
+                        strategy_name=intent.strategy_name,
+                        ticker=intent.ticker,
+                    )
+                    continue
+                try:
+                    order_builder.submit_intent(dec.intent, alpaca=alpaca)
+                    submitted += 1
+                except Exception as e:  # noqa: BLE001
+                    log.warning("submit failed for %s: %s", intent.ticker, e)
 
     # Refresh positions so the next `manage_stops` tick sees the new rows.
     try:
@@ -192,8 +251,16 @@ def execute_strategies() -> dict[str, int]:
     except Exception as e:  # noqa: BLE001
         log.warning("post-submit reconcile failed: %s", e)
 
-    log.info("execute_strategies: submitted=%d rejected=%d", submitted, rejected)
-    return {"submitted": submitted, "rejected": rejected}
+    try:
+        fmp.close()
+    except Exception:  # noqa: BLE001
+        pass
+
+    log.info(
+        "execute_strategies: submitted=%d rejected=%d gated_trips=%d",
+        submitted, rejected, gated,
+    )
+    return {"submitted": submitted, "rejected": rejected, "gated_trips": gated}
 
 
 def manage_stops() -> dict[str, int]:
@@ -227,6 +294,27 @@ def manage_stops() -> dict[str, int]:
 
 def reconcile_now() -> dict[str, int]:
     return reconcile.reconcile_orders_and_positions()
+
+
+def snapshot_equity_and_prune() -> dict[str, int]:
+    """Daily: record an equity snapshot + prune old api_call_log rows.
+
+    The snapshot is the source of truth for the drawdown circuit breaker's
+    high-water-mark. The prune bounds the api_call_log table so the
+    api-health query stays fast.
+    """
+    create_all()
+    alpaca = AlpacaPaperClient()
+    acct = alpaca.get_account()
+    snap_id = store.record_equity_snapshot(
+        equity=float(acct.equity), cash=float(acct.cash),
+    )
+    pruned = store.prune_api_call_log(older_than_days=7)
+    log.info(
+        "snapshot_equity_and_prune: snapshot_id=%d pruned_api_rows=%d",
+        snap_id, pruned,
+    )
+    return {"snapshot_id": snap_id, "api_log_pruned": pruned}
 
 
 def write_eod_summary() -> dict[str, int]:
@@ -293,6 +381,7 @@ if __name__ == "__main__":
         "execute": execute_strategies,
         "stops": manage_stops,
         "reconcile": reconcile_now,
+        "snapshot": snapshot_equity_and_prune,
         "eod": write_eod_summary,
     }
     fn = mapping.get(cmd)
