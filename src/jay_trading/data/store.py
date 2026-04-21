@@ -172,3 +172,147 @@ def record_risk_event(
         s.add(ev)
         s.flush()
         return int(ev.id)
+
+
+# -- Risk layer accessors (phase 3) ----------------------------------------
+
+
+def record_equity_snapshot(equity: float, cash: float) -> int:
+    """Append a daily equity snapshot, carrying the high-water-mark forward.
+
+    On first insert, ``high_water_mark = equity``. On subsequent inserts,
+    ``high_water_mark = max(prior_hwm, equity)``.
+    """
+    from sqlalchemy import func
+
+    with session_scope() as s:
+        prior_hwm = s.scalar(
+            select(func.max(models.EquitySnapshot.high_water_mark))
+        )
+        hwm = max(float(equity), float(prior_hwm)) if prior_hwm is not None else float(equity)
+        snap = models.EquitySnapshot(
+            equity=float(equity), cash=float(cash), high_water_mark=hwm,
+        )
+        s.add(snap)
+        s.flush()
+        return int(snap.id)
+
+
+def latest_equity_snapshot() -> models.EquitySnapshot | None:
+    with session_scope() as s:
+        row = s.scalar(
+            select(models.EquitySnapshot).order_by(models.EquitySnapshot.ts.desc()).limit(1)
+        )
+        if row is not None:
+            s.expunge(row)
+        return row
+
+
+def record_api_call(
+    provider: str,
+    endpoint: str,
+    status: str,
+    latency_ms: float,
+    error_kind: str | None = None,
+) -> None:
+    """Log one outbound API call. Best-effort — swallows DB errors.
+
+    Keeping this non-raising is intentional: a DB hiccup during logging
+    must not cascade into failing the actual FMP/Alpaca call.
+    """
+    try:
+        with session_scope() as s:
+            row = models.ApiCallLog(
+                provider=provider,
+                endpoint=endpoint[:128],
+                status=status,
+                latency_ms=float(latency_ms),
+                error_kind=error_kind,
+            )
+            s.add(row)
+    except Exception as e:  # noqa: BLE001
+        log.debug("api_call_log write failed: %s", e)
+
+
+def api_error_rate(provider: str, window_minutes: int = 30) -> tuple[int, int]:
+    """Return ``(fail_count, total_count)`` for ``provider`` over the window."""
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import func
+
+    since = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    with session_scope() as s:
+        total = s.scalar(
+            select(func.count(models.ApiCallLog.id))
+            .where(models.ApiCallLog.provider == provider)
+            .where(models.ApiCallLog.ts >= since)
+        ) or 0
+        fails = s.scalar(
+            select(func.count(models.ApiCallLog.id))
+            .where(models.ApiCallLog.provider == provider)
+            .where(models.ApiCallLog.status == "fail")
+            .where(models.ApiCallLog.ts >= since)
+        ) or 0
+        return int(fails), int(total)
+
+
+def prune_api_call_log(older_than_days: int = 7) -> int:
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import delete
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+    with session_scope() as s:
+        result = s.execute(
+            delete(models.ApiCallLog).where(models.ApiCallLog.ts < cutoff)
+        )
+        return int(result.rowcount or 0)
+
+
+def upsert_ticker_profile(
+    ticker: str,
+    sector: str | None,
+    industry: str | None = None,
+    market_cap: float | None = None,
+) -> None:
+    from datetime import datetime, timezone
+
+    with session_scope() as s:
+        existing = s.get(models.TickerProfile, ticker.upper())
+        if existing is None:
+            s.add(models.TickerProfile(
+                ticker=ticker.upper(),
+                sector=sector,
+                industry=industry,
+                market_cap=market_cap,
+                last_refreshed=datetime.now(timezone.utc),
+            ))
+        else:
+            existing.sector = sector
+            existing.industry = industry
+            existing.market_cap = market_cap
+            existing.last_refreshed = datetime.now(timezone.utc)
+
+
+def get_ticker_profile(ticker: str) -> models.TickerProfile | None:
+    with session_scope() as s:
+        row = s.get(models.TickerProfile, ticker.upper())
+        if row is not None:
+            s.expunge(row)
+        return row
+
+
+def sector_position_count(sector: str) -> int:
+    """How many open Position rows are in the given sector (across strategies)?"""
+    from sqlalchemy import func
+
+    if not sector:
+        return 0
+    with session_scope() as s:
+        count = s.scalar(
+            select(func.count(models.Position.id))
+            .join(
+                models.TickerProfile,
+                models.TickerProfile.ticker == models.Position.ticker,
+            )
+            .where(models.TickerProfile.sector == sector)
+        ) or 0
+        return int(count)

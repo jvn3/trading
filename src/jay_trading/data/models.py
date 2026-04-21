@@ -193,3 +193,66 @@ class RiskEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, index=True
     )
+
+
+# --- Risk layer runtime state ---------------------------------------------
+
+
+class EquitySnapshot(Base):
+    """Daily snapshot of account equity used by the drawdown circuit breaker.
+
+    One row per calendar day (the daily ``snapshot_equity_and_prune`` job
+    writes it at 16:05 ET). ``high_water_mark`` is the max of all prior
+    ``equity`` values, carried forward monotonically so the drawdown check
+    has O(1) access.
+    """
+
+    __tablename__ = "equity_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+    equity: Mapped[float] = mapped_column(Float)
+    cash: Mapped[float] = mapped_column(Float)
+    high_water_mark: Mapped[float] = mapped_column(Float)
+
+
+class ApiCallLog(Base):
+    """One row per outbound FMP / Alpaca call. Pruned to 7 days on the daily job.
+
+    Used by the ``api_health`` pipeline gate to compute a rolling error rate
+    without needing to hold state in the scheduler process (so a restart
+    does not lose the window).
+    """
+
+    __tablename__ = "api_call_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(16), index=True)  # "fmp" | "alpaca"
+    endpoint: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(8), index=True)  # "ok" | "fail"
+    latency_ms: Mapped[float] = mapped_column(Float)
+    error_kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class TickerProfile(Base):
+    """Cached company metadata, primarily for the sector-correlation cap.
+
+    Populated lazily by ``risk.guards.check_correlation_cap`` from FMP's
+    ``/stable/profile?symbol=X`` response. Refreshed if ``last_refreshed``
+    is older than 30 days.
+    """
+
+    __tablename__ = "ticker_profile"
+
+    ticker: Mapped[str] = mapped_column(String(16), primary_key=True)
+    sector: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    industry: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_refreshed: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
