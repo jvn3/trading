@@ -208,6 +208,46 @@ def latest_equity_snapshot() -> models.EquitySnapshot | None:
         return row
 
 
+def record_macro_regime_snapshot(
+    *,
+    regime: str,
+    spy_score: float,
+    vix_score: float,
+    curve_score: float,
+    raw_inputs: dict[str, Any] | None = None,
+) -> int:
+    """Append a :class:`MacroRegimeSnapshot` row.
+
+    Called by the ``classify_macro_regime`` job once per morning. No
+    deduplication — multiple snapshots per day are allowed (and useful if we
+    ever add intraday re-classification).
+    """
+    with session_scope() as s:
+        snap = models.MacroRegimeSnapshot(
+            regime=regime,
+            spy_score=float(spy_score),
+            vix_score=float(vix_score),
+            curve_score=float(curve_score),
+            raw_inputs=raw_inputs or {},
+        )
+        s.add(snap)
+        s.flush()
+        return int(snap.id)
+
+
+def latest_macro_regime() -> models.MacroRegimeSnapshot | None:
+    """Most recent snapshot, or ``None`` if the classifier hasn't run yet."""
+    with session_scope() as s:
+        row = s.scalar(
+            select(models.MacroRegimeSnapshot)
+            .order_by(models.MacroRegimeSnapshot.ts.desc())
+            .limit(1)
+        )
+        if row is not None:
+            s.expunge(row)
+        return row
+
+
 def record_api_call(
     provider: str,
     endpoint: str,

@@ -3,6 +3,11 @@
 This is the only risk check the user opted to keep beyond paper-URL and the
 per-strategy ``enabled`` flag. No circuit breakers, no sector heat, no
 correlation check — those are reserved for a later risk layer.
+
+Strategy V regime multiplier: the executor passes ``regime_multiplier`` here
+to scale per-trade notional by the current macro regime (FULL_RISK_ON=1.0,
+MODERATE_RISK_ON=0.75, RISK_OFF_DEFENSIVE=0.5, RISK_OFF_CRISIS=0.0). A ``0.0``
+multiplier rejects the open outright. Close intents are untouched.
 """
 from __future__ import annotations
 
@@ -31,13 +36,29 @@ def size_intent(
     target_pct: float = DEFAULT_TARGET_PCT,
     hard_cap_pct: float = DEFAULT_HARD_CAP_PCT,
     max_concurrent: int = DEFAULT_MAX_CONCURRENT,
+    *,
+    regime_multiplier: float = 1.0,
 ) -> SizingDecision:
     """Apply position-size cap + concurrency cap to an *open*-action intent.
 
     Close / adjust intents are passed through unchanged.
+
+    ``regime_multiplier`` (Strategy V) scales both the caller's desired
+    notional and the equity-based default. A multiplier of ``0.0`` short-
+    circuits to ``REJECT`` with a ``regime_blocked`` reason. Values outside
+    ``[0.0, 1.0]`` are clamped to avoid an upstream bug inflating sizes.
     """
     if intent.action != "open":
         return SizingDecision("APPROVE", intent)
+
+    # Regime-driven block. Fail-open if multiplier is bogus/negative — the
+    # executor already logs when the snapshot is missing.
+    mult = max(0.0, min(1.0, float(regime_multiplier)))
+    if mult <= 0.0:
+        return SizingDecision(
+            "REJECT", None,
+            reason="regime_blocked: macro regime sizing multiplier is 0.0",
+        )
 
     # Concurrency cap
     open_same_strategy = [
@@ -70,6 +91,10 @@ def size_intent(
     # If the caller didn't pick a size, default to target_pct of equity.
     if target_notional is None:
         target_notional = target_from_equity
+
+    # Scale by regime multiplier BEFORE the hard cap so the cap still
+    # bounds the absolute dollar risk, not a scaled version of it.
+    target_notional = round(target_notional * mult, 2)
 
     # Never exceed hard cap.
     target_notional = min(target_notional, hard_cap)

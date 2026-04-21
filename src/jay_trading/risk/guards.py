@@ -34,8 +34,10 @@ API_HEALTH_WINDOW_MINUTES = 30
 API_HEALTH_FAIL_RATE_THRESHOLD = 0.30
 API_HEALTH_MIN_CALLS = 10
 SECTOR_CORRELATION_CAP = 3
-MARKET_REGIME_TICKER = "SPY"
-MARKET_REGIME_CACHE_TTL_SEC = 300.0
+# NOTE: the binary ``check_market_regime`` gate was retired on 2026-04-21 when
+# Strategy V (``risk.macro_regime``) shipped. The 5-level macro regime
+# classifier replaces it; its output feeds position sizing rather than a
+# hard long/short block. See development/log.md 2026-04-21.
 
 
 # -- Result types ----------------------------------------------------------
@@ -132,43 +134,6 @@ def check_api_health(*, window_minutes: int = API_HEALTH_WINDOW_MINUTES, **_: An
     return GateResult(True)
 
 
-def check_market_regime(*, fmp: Any, **_: Any) -> GateResult:
-    """Trip if SPY is below its 200-day MA — too risky to open new longs."""
-    cache = api_health.cache()
-    cached = cache.get("market_regime")
-    if cached is not None:
-        return cached
-
-    try:
-        quote = fmp.request("quote", params={"symbol": MARKET_REGIME_TICKER})
-    except Exception as e:  # noqa: BLE001
-        log.warning("market_regime: SPY quote failed, passing gate: %s", e)
-        return GateResult(True, reason="spy quote unavailable, fail-open")
-
-    if not isinstance(quote, list) or not quote:
-        return GateResult(True, reason="spy quote empty, fail-open")
-
-    row = quote[0]
-    price = float(row.get("price") or 0.0)
-    ma200 = float(row.get("priceAvg200") or 0.0)
-    if price <= 0 or ma200 <= 0:
-        return GateResult(True, reason="spy price/ma200 zero, fail-open")
-
-    if price < ma200:
-        result = GateResult(
-            False,
-            reason=(
-                f"SPY ${price:.2f} below 200d MA ${ma200:.2f} "
-                f"({(price/ma200 - 1):.2%}) — long entries blocked"
-            ),
-            details={"spy_price": price, "spy_ma200": ma200},
-        )
-    else:
-        result = GateResult(True, details={"spy_price": price, "spy_ma200": ma200})
-    cache.set("market_regime", result, ttl_sec=MARKET_REGIME_CACHE_TTL_SEC)
-    return result
-
-
 # -- Per-intent gate -------------------------------------------------------
 
 
@@ -210,7 +175,6 @@ _PIPELINE_GATES: list[tuple[str, Any]] = [
     ("daily_loss", check_daily_loss),
     ("drawdown", check_drawdown),
     ("api_health", check_api_health),
-    ("market_regime_long", check_market_regime),
 ]
 
 
