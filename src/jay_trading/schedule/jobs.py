@@ -14,8 +14,9 @@ from jay_trading.data import models, store
 from jay_trading.data.alpaca_client import AlpacaPaperClient
 from jay_trading.data.db import create_all, get_engine, session_scope
 from jay_trading.data.fmp import FMPClient, normalize, since_window_days
+from jay_trading.data.fred import FREDClient
 from jay_trading.executor import order_builder, portfolio as portfolio_mod, reconcile
-from jay_trading.risk import guards
+from jay_trading.risk import guards, macro_regime
 from jay_trading.risk.sizing import size_intent
 from jay_trading.signals.cluster_detector import find_clusters, upsert_signals
 from jay_trading.signals.insider_cluster_detector import (
@@ -171,9 +172,13 @@ def _unacted_signals() -> list[SignalView]:
 def execute_strategies() -> dict[str, int]:
     """Generate intents, size them, and submit to Alpaca paper.
 
-    Pipeline risk gates (daily loss / drawdown / API health / market regime)
-    are evaluated once at the top. If any trip, new entries are blocked for
-    this tick — exits still run via ``manage_stops`` on a separate schedule.
+    Pipeline risk gates (daily loss / drawdown / API health) are evaluated
+    once at the top. If any trip, new entries are blocked for this tick —
+    exits still run via ``manage_stops`` on a separate schedule.
+
+    Strategy V macro regime: read the most recent regime snapshot and apply
+    its sizing multiplier. A ``RISK_OFF_CRISIS`` regime (multiplier 0.0)
+    short-circuits all new opens. A missing snapshot fails open to 1.0.
     """
     create_all()
     signals = _unacted_signals()
@@ -189,6 +194,17 @@ def execute_strategies() -> dict[str, int]:
         log.exception("pipeline gate evaluation crashed — passing (fail-open): %s", e)
         pipeline = guards.PipelineDecision(allow_entries=True, trips=[])
 
+    # Strategy V: look up the latest macro regime once per tick.
+    regime_snap = store.latest_macro_regime()
+    if regime_snap is None:
+        log.warning(
+            "macro_regime: no snapshot yet — sizing multiplier defaulting to 1.0"
+        )
+        regime_name = None
+    else:
+        regime_name = regime_snap.regime
+    regime_mult = macro_regime.sizing_multiplier(regime_name)
+
     submitted = 0
     rejected = 0
     gated = 0
@@ -203,6 +219,19 @@ def execute_strategies() -> dict[str, int]:
                 payload=result.details,
             )
         gated = len(pipeline.trips)
+    elif regime_mult <= 0.0:
+        # Strategy V CRISIS: block new opens without tripping a breaker.
+        log.warning(
+            "macro_regime=%s (multiplier %.2f) — new opens blocked this tick",
+            regime_name, regime_mult,
+        )
+        store.record_risk_event(
+            kind="regime_block",
+            severity="halt",
+            reason=f"macro regime {regime_name} blocks new entries",
+            payload={"regime": regime_name, "multiplier": regime_mult},
+        )
+        gated = 1
     else:
         for strat in STRATEGIES:
             if not strat.enabled:
@@ -210,8 +239,8 @@ def execute_strategies() -> dict[str, int]:
             my_signals = [s for s in signals if s.strategy_name == strat.name]
             intents = strat.generate_intents(my_signals, portfolio)
             log.info(
-                "execute_strategies[%s]: %d raw intents from %d signals",
-                strat.name, len(intents), len(my_signals),
+                "execute_strategies[%s]: %d raw intents from %d signals (regime_mult=%.2f)",
+                strat.name, len(intents), len(my_signals), regime_mult,
             )
             for intent in intents:
                 # Per-intent: sector-correlation cap
@@ -228,7 +257,7 @@ def execute_strategies() -> dict[str, int]:
                         payload=cor.details,
                     )
                     continue
-                dec = size_intent(intent, portfolio)
+                dec = size_intent(intent, portfolio, regime_multiplier=regime_mult)
                 if dec.verdict == "REJECT" or dec.intent is None:
                     rejected += 1
                     log.info("reject %s %s: %s", intent.ticker, intent.side, dec.reason)
@@ -294,6 +323,52 @@ def manage_stops() -> dict[str, int]:
 
 def reconcile_now() -> dict[str, int]:
     return reconcile.reconcile_orders_and_positions()
+
+
+def classify_macro_regime() -> dict[str, object]:
+    """Strategy V: classify the macro regime and persist a snapshot.
+
+    Runs at ~08:35 ET on weekdays (after ingest, before signals). Writes one
+    row to ``macro_regime_snapshots`` and returns a summary dict. Fails
+    loudly on missing inputs — a missing snapshot is safer than one with
+    fabricated values, and the sizing layer fails open if the snapshot is
+    absent.
+    """
+    create_all()
+    fmp = FMPClient()
+    fred = FREDClient()
+    try:
+        inputs = macro_regime.gather_inputs(fmp=fmp, fred=fred)
+    finally:
+        try:
+            fmp.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            fred.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    result = macro_regime.classify(inputs)
+    snap_id = store.record_macro_regime_snapshot(
+        regime=result.regime.value,
+        spy_score=result.spy_score,
+        vix_score=result.vix_score,
+        curve_score=result.curve_score,
+        raw_inputs=result.raw,
+    )
+    log.info(
+        "classify_macro_regime: regime=%s snap_id=%d scores=(spy=%.2f vix=%.2f curve=%.2f)",
+        result.regime.value, snap_id,
+        result.spy_score, result.vix_score, result.curve_score,
+    )
+    return {
+        "snapshot_id": snap_id,
+        "regime": result.regime.value,
+        "spy_score": result.spy_score,
+        "vix_score": result.vix_score,
+        "curve_score": result.curve_score,
+    }
 
 
 def snapshot_equity_and_prune() -> dict[str, int]:
@@ -382,6 +457,7 @@ if __name__ == "__main__":
         "stops": manage_stops,
         "reconcile": reconcile_now,
         "snapshot": snapshot_equity_and_prune,
+        "regime": classify_macro_regime,
         "eod": write_eod_summary,
     }
     fn = mapping.get(cmd)

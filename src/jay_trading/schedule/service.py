@@ -107,8 +107,10 @@ def build_scheduler() -> BlockingScheduler:
         },
     )
 
-    # Morning: ingest → generate signals → (markets open at 09:30 ET) → execute
+    # Morning: ingest → classify macro regime → generate signals →
+    # (markets open at 09:30 ET) → execute.
     sched.add_job(_wrapped(jobs.ingest_disclosures), CronTrigger(hour=8, minute=30, day_of_week="mon-fri"))
+    sched.add_job(_wrapped(jobs.classify_macro_regime), CronTrigger(hour=8, minute=35, day_of_week="mon-fri"))
     sched.add_job(_wrapped(jobs.generate_signals), CronTrigger(hour=8, minute=40, day_of_week="mon-fri"))
     sched.add_job(_wrapped(jobs.execute_strategies), CronTrigger(hour=9, minute=35, day_of_week="mon-fri"))
 

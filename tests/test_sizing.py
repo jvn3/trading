@@ -72,3 +72,81 @@ def test_close_intent_passes_through_unchanged() -> None:
     dec = size_intent(close, _portfolio(positions=[_position("NVDA")]))
     assert dec.verdict == "APPROVE"
     assert dec.intent is close
+
+
+# ---- Strategy V regime multiplier --------------------------------------
+
+
+def test_regime_multiplier_one_is_default_and_no_op() -> None:
+    # Default mult=1.0 → existing behavior preserved.
+    dec = size_intent(_intent(notional=500), _portfolio(equity=10_000))
+    assert dec.verdict == "APPROVE"
+
+
+def test_regime_multiplier_zero_rejects_with_regime_blocked() -> None:
+    dec = size_intent(
+        _intent(notional=500),
+        _portfolio(equity=10_000),
+        regime_multiplier=0.0,
+    )
+    assert dec.verdict == "REJECT"
+    assert "regime_blocked" in dec.reason
+
+
+def test_regime_multiplier_scales_caller_notional() -> None:
+    # 0.75 mult on $500 notional → $375.
+    dec = size_intent(
+        _intent(notional=500),
+        _portfolio(equity=10_000),
+        regime_multiplier=0.75,
+    )
+    assert dec.verdict == "MODIFY"
+    assert dec.intent is not None
+    assert dec.intent.notional == 375.0
+
+
+def test_regime_multiplier_scales_default_equity_target() -> None:
+    # qty-only intent (notional=None) → sizing layer uses 5% of equity = $500.
+    # With mult=0.5 → $250.
+    dec = size_intent(
+        _intent(notional=None, qty=1.0),
+        _portfolio(equity=10_000),
+        regime_multiplier=0.5,
+    )
+    assert dec.verdict == "MODIFY"
+    assert dec.intent is not None
+    assert dec.intent.notional == 250.0
+
+
+def test_regime_multiplier_above_one_is_clamped() -> None:
+    # Defensive clamp — an upstream bug should not let regime inflate sizing
+    # above the configured target_pct.
+    dec = size_intent(
+        _intent(notional=500),
+        _portfolio(equity=10_000),
+        regime_multiplier=2.0,
+    )
+    assert dec.verdict == "APPROVE"  # treated as 1.0
+
+
+def test_regime_multiplier_negative_treated_as_block() -> None:
+    dec = size_intent(
+        _intent(notional=500),
+        _portfolio(equity=10_000),
+        regime_multiplier=-0.1,
+    )
+    assert dec.verdict == "REJECT"
+    assert "regime_blocked" in dec.reason
+
+
+def test_close_intent_ignores_regime_block() -> None:
+    # CRISIS regime must never block exits.
+    close = TradeIntent(
+        strategy_name="smart_copy", ticker="NVDA", side="sell",
+        qty=1.5, action="close",
+    )
+    dec = size_intent(
+        close, _portfolio(positions=[_position("NVDA")]),
+        regime_multiplier=0.0,
+    )
+    assert dec.verdict == "APPROVE"

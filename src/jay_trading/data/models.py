@@ -256,3 +256,26 @@ class TickerProfile(Base):
     last_refreshed: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
+
+
+class MacroRegimeSnapshot(Base):
+    """One classification of the portfolio-wide macro regime (Strategy V).
+
+    Written by the ``classify_macro_regime`` scheduled job (08:35 ET on
+    weekdays) and read by the executor to apply a sizing multiplier to each
+    strategy's intents. Component scores are kept so the dashboard and
+    post-mortems can see *why* a given regime was picked without re-running
+    the classifier.
+    """
+
+    __tablename__ = "macro_regime_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+    regime: Mapped[str] = mapped_column(String(32), index=True)
+    spy_score: Mapped[float] = mapped_column(Float)
+    vix_score: Mapped[float] = mapped_column(Float)
+    curve_score: Mapped[float] = mapped_column(Float)
+    raw_inputs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

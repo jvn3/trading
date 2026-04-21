@@ -139,30 +139,10 @@ def test_api_health_trips_on_high_fail_rate() -> None:
     assert res.details["fails"] == 6
 
 
-# -- Market regime gate ----------------------------------------------------
-
-
-def test_market_regime_passes_when_spy_above_ma200() -> None:
-    create_all()
-    res = guards.check_market_regime(fmp=_FakeFMP(spy_price=500.0, spy_ma200=480.0))
-    assert res.passed is True
-
-
-def test_market_regime_trips_when_spy_below_ma200() -> None:
-    create_all()
-    res = guards.check_market_regime(fmp=_FakeFMP(spy_price=470.0, spy_ma200=480.0))
-    assert res.passed is False
-    assert "SPY" in res.reason
-
-
-def test_market_regime_is_cached_between_calls() -> None:
-    create_all()
-    fmp = _FakeFMP(spy_price=500.0, spy_ma200=480.0)
-    guards.check_market_regime(fmp=fmp)
-    # Mutate the fake to simulate a changed market; cache should hide the change.
-    fmp.spy_price = 400.0
-    res = guards.check_market_regime(fmp=fmp)
-    assert res.passed is True  # returned cached result
+# -- Market regime gate (RETIRED 2026-04-21) ------------------------------
+# The binary check_market_regime gate was replaced by Strategy V's macro
+# regime classifier (see tests/test_macro_regime.py). The classifier outputs
+# a 4-level regime that drives sizing rather than a hard long/short block.
 
 
 # -- Sector correlation cap ------------------------------------------------
