@@ -248,6 +248,32 @@ def latest_macro_regime() -> models.MacroRegimeSnapshot | None:
         return row
 
 
+def count_distinct_insider_buys(ticker: str, *, days: int = 30) -> int:
+    """Count distinct insiders with at least one ``buy`` on ``ticker``
+    in the last ``days``.
+
+    Used by the cluster_detector's "insider confluence" multiplier (knob 3,
+    2026-04-22): a congressional cluster gets a small score bump if real
+    insider buy interest is concurrent on the same ticker. Buys only —
+    ``exchange`` (option grants/exercises) and ``sell`` rows are noise here.
+    """
+    from datetime import date, timedelta
+    from sqlalchemy import func
+
+    if not ticker:
+        return 0
+    since = date.today() - timedelta(days=days)
+    with session_scope() as s:
+        n = s.scalar(
+            select(func.count(func.distinct(models.DisclosedTrade.person_name)))
+            .where(models.DisclosedTrade.source == "insider")
+            .where(models.DisclosedTrade.ticker == ticker.upper())
+            .where(models.DisclosedTrade.transaction_type == "buy")
+            .where(models.DisclosedTrade.filing_date >= since)
+        )
+    return int(n or 0)
+
+
 def record_api_call(
     provider: str,
     endpoint: str,

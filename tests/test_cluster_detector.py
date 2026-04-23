@@ -122,3 +122,115 @@ def test_committee_bonus_applies_when_relevant(scores) -> None:
     # With committee relevance we expect score >= base * 1.2 * 1.2
     # base = 2/5 = 0.4, so minimum with bonuses = 0.4 * 1.2 * 1.2 = 0.576
     assert lmt[0].score >= 0.5
+
+
+# ---- Knob 2: conviction (track-record) multiplier ----------------------
+
+
+def test_conviction_bonus_fires_when_member_has_strong_record() -> None:
+    create_all()
+    # Dave is a high-conviction politician (trailing return 8% > 5% threshold).
+    high_conviction_scores = {
+        "Dave": PoliticianScore("Dave", 0.08, 5, True),
+        "Eve":  PoliticianScore("Eve", 0.01, 3, True),
+    }
+    store.upsert_disclosed_trades([
+        _row("senate", "Dave", "AVGO", "buy", date(2026, 4, 5), date(2026, 4, 10)),
+        _row("house",  "Eve",  "AVGO", "buy", date(2026, 4, 8), date(2026, 4, 14)),
+    ])
+    clusters = find_clusters(scores=high_conviction_scores)
+    avgo = [c for c in clusters if c.ticker == "AVGO" and c.direction == "long"]
+    assert avgo
+    c = avgo[0]
+    # base 0.4 × quality 1.2 × committee 1.0 × conviction 1.2 = 0.576
+    assert c.score == pytest.approx(0.576, rel=1e-3)
+    assert c.score_components["conviction_mult"] == 1.2
+
+
+def test_conviction_bonus_skipped_when_no_strong_record() -> None:
+    create_all()
+    # Both politicians positive but neither above 5%.
+    weak_scores = {
+        "Frank": PoliticianScore("Frank", 0.04, 2, True),
+        "Gail":  PoliticianScore("Gail",  0.02, 2, True),
+    }
+    store.upsert_disclosed_trades([
+        _row("senate", "Frank", "INTC", "buy", date(2026, 4, 5), date(2026, 4, 10)),
+        _row("house",  "Gail",  "INTC", "buy", date(2026, 4, 8), date(2026, 4, 14)),
+    ])
+    clusters = find_clusters(scores=weak_scores)
+    intc = [c for c in clusters if c.ticker == "INTC" and c.direction == "long"]
+    assert intc
+    c = intc[0]
+    # base 0.4 × quality 1.2 × no other multipliers = 0.48
+    assert c.score == pytest.approx(0.48, rel=1e-3)
+    assert c.score_components["conviction_mult"] == 1.0
+
+
+# ---- Knob 3: insider co-buying confluence ------------------------------
+
+
+def test_insider_confluence_bonus_fires_with_two_insider_buys() -> None:
+    create_all()
+    # Two insider BUYS on AAPL within the lookback window.
+    store.upsert_disclosed_trades([
+        _row("insider", "Insider A", "AAPL", "buy", date(2026, 4, 1), date(2026, 4, 2)),
+        _row("insider", "Insider B", "AAPL", "buy", date(2026, 4, 3), date(2026, 4, 4)),
+        # Plus a 2-politician congress cluster on the same ticker.
+        _row("senate", "Helen", "AAPL", "buy", date(2026, 4, 5), date(2026, 4, 10)),
+        _row("house",  "Ian",   "AAPL", "buy", date(2026, 4, 8), date(2026, 4, 14)),
+    ])
+    scores = {
+        "Helen": PoliticianScore("Helen", 0.02, 2, True),
+        "Ian":   PoliticianScore("Ian",   0.01, 2, True),
+    }
+    clusters = find_clusters(scores=scores)
+    aapl = [c for c in clusters if c.ticker == "AAPL" and c.direction == "long"]
+    assert aapl
+    c = aapl[0]
+    # base 0.4 × quality 1.2 × insider_confluence 1.15 = 0.552
+    assert c.score == pytest.approx(0.552, rel=1e-3)
+    assert c.score_components["insider_confluence_mult"] == 1.15
+    assert c.score_components["n_insider_buyers"] == 2
+
+
+def test_insider_confluence_skipped_when_only_sells_on_ticker() -> None:
+    create_all()
+    # Insider activity is sells-only — does not count toward confluence.
+    store.upsert_disclosed_trades([
+        _row("insider", "Insider A", "MU", "sell", date(2026, 4, 1), date(2026, 4, 2)),
+        _row("insider", "Insider B", "MU", "sell", date(2026, 4, 3), date(2026, 4, 4)),
+        _row("senate", "Jane", "MU", "buy", date(2026, 4, 5), date(2026, 4, 10)),
+        _row("house",  "Ken",  "MU", "buy", date(2026, 4, 8), date(2026, 4, 14)),
+    ])
+    scores = {
+        "Jane": PoliticianScore("Jane", 0.02, 2, True),
+        "Ken":  PoliticianScore("Ken",  0.01, 2, True),
+    }
+    clusters = find_clusters(scores=scores)
+    mu = [c for c in clusters if c.ticker == "MU" and c.direction == "long"]
+    assert mu
+    c = mu[0]
+    assert c.score_components["insider_confluence_mult"] == 1.0
+    assert c.score_components["n_insider_buyers"] == 0
+
+
+def test_all_knobs_compose_for_max_lift() -> None:
+    create_all()
+    # 2 politicians, one high-conviction, with insider co-buying.
+    store.upsert_disclosed_trades([
+        _row("insider", "Insider X", "ASML", "buy", date(2026, 4, 1), date(2026, 4, 2)),
+        _row("insider", "Insider Y", "ASML", "buy", date(2026, 4, 3), date(2026, 4, 4)),
+        _row("senate", "Liam", "ASML", "buy", date(2026, 4, 5), date(2026, 4, 10)),
+        _row("house",  "Mia",  "ASML", "buy", date(2026, 4, 8), date(2026, 4, 14)),
+    ])
+    scores = {
+        "Liam": PoliticianScore("Liam", 0.10, 6, True),  # high conviction
+        "Mia":  PoliticianScore("Mia",  0.02, 2, True),
+    }
+    clusters = find_clusters(scores=scores)
+    asml = [c for c in clusters if c.ticker == "ASML" and c.direction == "long"]
+    assert asml
+    c = asml[0]
+    # base 0.4 × quality 1.2 × conviction 1.2 × insider 1.15 = 0.6624
+    assert c.score == pytest.approx(0.6624, rel=1e-3)

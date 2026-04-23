@@ -1,7 +1,7 @@
 """SmartCopyStrategy — trade congressional clusters.
 
-Entries: one market-buy intent per new cluster signal with score > 0.5, up to
-:attr:`max_concurrent_positions` open at a time, no duplicates.
+Entries: one market-buy intent per new cluster signal with score >= 0.45, up
+to :attr:`max_concurrent_positions` open at a time, no duplicates.
 
 Exits (managed in software, since Alpaca doesn't support stop orders on
 fractional positions):
@@ -33,7 +33,10 @@ from jay_trading.strategies.base import (
 
 log = logging.getLogger(__name__)
 
-SCORE_THRESHOLD = 0.5
+# Lowered from 0.5 → 0.45 on 2026-04-22 so 2-politician clusters with a
+# positive avg quality (max plain score 0.48) can clear the bar. See
+# development/log.md 2026-04-22 — "knobs" change.
+SCORE_THRESHOLD = 0.45
 HARD_STOP_PCT = -0.08
 TRAIL_ACTIVATE_PCT = 0.10
 TRAIL_GIVE_BACK_PCT = 0.05

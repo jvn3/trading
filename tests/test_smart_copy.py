@@ -50,6 +50,21 @@ def test_generate_intents_filters_low_scores() -> None:
     assert intents == []
 
 
+def test_generate_intents_admits_at_new_threshold() -> None:
+    # 2-pol clusters with positive avg quality score 0.48 — must clear the
+    # post-knob-1 threshold (0.45). Regression guard so a future bump back
+    # to 0.5 doesn't silently re-block them.
+    s = SmartCopyStrategy()
+    intents = s.generate_intents([_sig(score=0.48)], _pf())
+    assert len(intents) == 1
+
+
+def test_generate_intents_blocks_just_below_threshold() -> None:
+    s = SmartCopyStrategy()
+    intents = s.generate_intents([_sig(score=0.44)], _pf())
+    assert intents == []
+
+
 def test_generate_intents_skips_tickers_we_hold() -> None:
     s = SmartCopyStrategy()
     intents = s.generate_intents([_sig()], _pf(positions=[_pos("NVDA")]))

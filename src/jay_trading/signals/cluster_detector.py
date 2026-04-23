@@ -6,11 +6,25 @@ A cluster is:
 - on the same ticker
 - within a 14-day filing-date window
 
-Score:
-    base         = min(n_distinct_members, 5) / 5
-    quality_mult = 1.2 if mean(politician quality scores) > 0 else 0.8
-    committee_mult = 1.2 if any member on a relevant committee else 1.0
-    score        = clip(base * quality_mult * committee_mult, 0, 1)
+Score (post 2026-04-22 "knobs" change):
+    base                     = min(n_distinct_members, 5) / 5
+    quality_mult             = 1.2 if mean(politician quality scores) > 0 else 0.8
+    committee_mult           = 1.2 if any member on a relevant committee else 1.0
+    conviction_mult          = 1.2 if any member's trailing 6mo return > 5% else 1.0
+    insider_confluence_mult  = 1.15 if same ticker has >= 2 distinct insider
+                               BUYS in the last 30 days else 1.0
+    score = clip(base * quality_mult * committee_mult *
+                 conviction_mult * insider_confluence_mult, 0, 1)
+
+The new ``conviction_mult`` substitutes for the dead committee data: in
+practice ``person_role`` from FMP carries state/district codes ("AR",
+"TX10"), never committee names, so ``committee_mult`` is almost always 1.0.
+``conviction_mult`` rewards clusters that contain a politician with a
+demonstrable trailing track record.
+
+The new ``insider_confluence_mult`` is a lightweight cross-strategy bonus:
+when the cluster's ticker also shows real insider buy activity (not the
+much-more-common option grants/exercises), the signal earns a 15% kicker.
 
 Emits :class:`jay_trading.data.models.Signal` rows only for clusters we
 haven't seen yet (keyed by ticker + direction + earliest-in-cluster filing
@@ -26,7 +40,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from jay_trading.data import models
+from jay_trading.data import models, store
 from jay_trading.data.db import session_scope
 from jay_trading.signals.politician_scorer import (
     PoliticianScore,
@@ -40,6 +54,18 @@ CLUSTER_WINDOW_DAYS = 14
 MIN_MEMBERS = 2
 STRATEGY_NAME = "smart_copy"
 
+# Knob 2 (2026-04-22): a politician with trailing 6mo return above this
+# threshold counts as "high conviction" and triggers the +20% conviction
+# multiplier on any cluster they're a member of.
+HIGH_CONVICTION_RETURN = 0.05
+CONVICTION_MULT = 1.2
+
+# Knob 3 (2026-04-22): if the ticker has at least this many distinct
+# insider BUYS in the last 30 days, the cluster gets a +15% kicker.
+INSIDER_CONFLUENCE_MIN_BUYERS = 2
+INSIDER_CONFLUENCE_LOOKBACK_DAYS = 30
+INSIDER_CONFLUENCE_MULT = 1.15
+
 
 @dataclass
 class Cluster:
@@ -49,10 +75,28 @@ class Cluster:
     window_end: date
     members: list[dict[str, Any]]  # dicts ready for Signal.rationale
     score: float
+    score_components: dict[str, Any] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.score_components is None:
+            self.score_components = {}
 
     @property
     def key(self) -> str:
         return f"{self.ticker}|{self.direction}|{self.window_start.isoformat()}"
+
+
+def _insider_buys_cache(ticker: str, cache: dict[str, int]) -> int:
+    """Look up cached insider-buy count for ``ticker``, populating from store
+    on miss. Used by ``find_clusters`` to keep DB hits at one per ticker."""
+    hit = cache.get(ticker)
+    if hit is not None:
+        return hit
+    n = store.count_distinct_insider_buys(
+        ticker, days=INSIDER_CONFLUENCE_LOOKBACK_DAYS
+    )
+    cache[ticker] = n
+    return n
 
 
 def _recent_congressional_trades(lookback_days: int) -> list[models.DisclosedTrade]:
@@ -98,6 +142,10 @@ def find_clusters(
         # Only score politicians we'll actually need, for speed.
         needed = {t.person_name for bucket in buckets.values() for t in bucket}
         scores = score_all(needed)
+
+    # Per-call cache so the insider_confluence multiplier hits the DB at
+    # most once per ticker, not per sliding-window candidate.
+    insider_buys_cache: dict[str, int] = {}
 
     clusters: list[Cluster] = []
     for (ticker, direction), bucket in buckets.items():
@@ -147,7 +195,33 @@ def find_clusters(
                 if any(committee_is_relevant(m.get("role"), ticker) for m in members_payload)
                 else 1.0
             )
-            score = max(0.0, min(1.0, base * quality_mult * committee_mult))
+            # Knob 2: high-conviction member bonus.
+            conviction_mult = (
+                CONVICTION_MULT
+                if any(m["quality_score"] > HIGH_CONVICTION_RETURN for m in members_payload)
+                else 1.0
+            )
+            # Knob 3: insider co-buying bonus. Cached per ticker via the
+            # closure-local ``insider_buys_cache`` so we hit the DB once
+            # per ticker, not once per sliding-window cluster candidate.
+            n_insider_buyers = _insider_buys_cache(ticker, insider_buys_cache)
+            insider_confluence_mult = (
+                INSIDER_CONFLUENCE_MULT
+                if n_insider_buyers >= INSIDER_CONFLUENCE_MIN_BUYERS
+                else 1.0
+            )
+
+            score = max(
+                0.0,
+                min(
+                    1.0,
+                    base
+                    * quality_mult
+                    * committee_mult
+                    * conviction_mult
+                    * insider_confluence_mult,
+                ),
+            )
 
             cluster = Cluster(
                 ticker=ticker,
@@ -156,6 +230,15 @@ def find_clusters(
                 window_end=latest,
                 members=members_payload,
                 score=score,
+                score_components={
+                    "base": round(base, 4),
+                    "n_members": n_members,
+                    "quality_mult": quality_mult,
+                    "committee_mult": committee_mult,
+                    "conviction_mult": conviction_mult,
+                    "insider_confluence_mult": insider_confluence_mult,
+                    "n_insider_buyers": n_insider_buyers,
+                },
             )
             clusters.append(cluster)
 
@@ -183,7 +266,7 @@ def cluster_to_signal_kwargs(cluster: Cluster) -> dict[str, Any]:
                 "window_start": cluster.window_start.isoformat(),
                 "window_end": cluster.window_end.isoformat(),
                 "members": cluster.members,
-                "score_components": {
+                "score_components": cluster.score_components or {
                     "base": round(min(len(cluster.members), 5) / 5.0, 4),
                     "n_members": len(cluster.members),
                 },

@@ -96,3 +96,32 @@ def test_record_risk_event_round_trip() -> None:
         ticker="NVDA",
     )
     assert isinstance(eid, int) and eid > 0
+
+
+def test_count_distinct_insider_buys_only_counts_buys() -> None:
+    create_all()
+    today = date.today()
+    store.upsert_disclosed_trades([
+        # 2 insider BUYS — should count.
+        _make_row(source="insider", person_name="A", ticker="BABA",
+                  transaction_type="buy", filing_date=today),
+        _make_row(source="insider", person_name="B", ticker="BABA",
+                  transaction_type="buy", filing_date=today,
+                  transaction_date=date(today.year, today.month, 1)),
+        # An insider SELL on the same ticker — must NOT count.
+        _make_row(source="insider", person_name="C", ticker="BABA",
+                  transaction_type="sell", filing_date=today,
+                  amount_low=1.0, amount_high=2.0),
+        # An insider EXCHANGE on the same ticker — must NOT count.
+        _make_row(source="insider", person_name="D", ticker="BABA",
+                  transaction_type="exchange", filing_date=today,
+                  amount_low=3.0, amount_high=4.0),
+        # A senate buy on the same ticker — must NOT count (wrong source).
+        _make_row(source="senate", person_name="Senator", ticker="BABA",
+                  transaction_type="buy", filing_date=today,
+                  amount_low=5.0, amount_high=6.0),
+    ])
+    assert store.count_distinct_insider_buys("BABA") == 2
+    assert store.count_distinct_insider_buys("baba") == 2  # case-insensitive
+    assert store.count_distinct_insider_buys("ZZZ") == 0
+    assert store.count_distinct_insider_buys("") == 0

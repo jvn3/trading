@@ -1,0 +1,17 @@
+# Lock all text files to LF in the index. Working trees on Windows will
+# still use CRLF if the editor/OS demands it; the index stays canonical.
+# This eliminates the CRLF<->LF diff churn that turned every commit into a
+# 6000-line phantom diff before 2026-04-22.
+* text=auto eol=lf
+
+# Binary types — never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.db binary
+*.sqlite binary
