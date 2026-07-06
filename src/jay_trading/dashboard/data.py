@@ -61,7 +61,9 @@ def positions() -> list[dict[str, Any]]:
         with session_scope() as s:
             meta = {
                 p.ticker.upper(): p
-                for p in s.scalars(select(models.Position))
+                for p in s.scalars(
+                    select(models.Position).where(models.Position.closed_at.is_(None))
+                )
             }
             for p in meta.values():
                 s.expunge(p)

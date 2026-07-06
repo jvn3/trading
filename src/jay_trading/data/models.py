@@ -159,12 +159,19 @@ class Fill(Base):
 
 
 class Position(Base):
-    """Our view of an open position, joined with the strategy that opened it."""
+    """A position's full lifecycle.
+
+    Open while ``closed_at`` is NULL. Closed rows are KEPT (not deleted) with
+    ``exit_price``/``realized_pnl`` filled in — they are the per-trade P&L
+    ledger that the original design lost by deleting rows on close (see
+    development/audit-2026-07-05.md). ``ticker`` is therefore indexed but no
+    longer unique: one ticker accumulates one row per round trip.
+    """
 
     __tablename__ = "positions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    ticker: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(16), index=True)
     strategy_name: Mapped[str] = mapped_column(String(64), index=True)
     entry_signal_id: Mapped[int | None] = mapped_column(
         ForeignKey("signals.id"), nullable=True
@@ -172,6 +179,11 @@ class Position(Base):
     qty: Mapped[float] = mapped_column(Float)
     avg_entry_price: Mapped[float] = mapped_column(Float)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    exit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
     hard_stop: Mapped[float | None] = mapped_column(Float, nullable=True)
     trail_peak: Mapped[float | None] = mapped_column(Float, nullable=True)
     trail_active: Mapped[bool] = mapped_column(Boolean, default=False)
