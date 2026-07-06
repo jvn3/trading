@@ -1,7 +1,9 @@
-# Register two Windows Task Scheduler tasks:
+# Register the Windows Task Scheduler tasks:
 #
-#  1. "JayTrading-Launcher"  -- runs at user logon; starts the scheduler via WSL.
-#  2. "JayTrading-Watchdog"  -- runs every 5 min; restarts scheduler if dead.
+#  1. "JayTrading-Launcher"     -- runs at user logon; starts the scheduler via WSL.
+#  2. "JayTrading-Watchdog"     -- runs every 5 min; restarts scheduler if dead.
+#  3. "JayTrading-MorningCheck" -- weekdays 10:15 (machine-local = ET here);
+#                                  unattended verification report to the vault.
 #
 # Run this script once from an Administrator PowerShell prompt:
 #   powershell -ExecutionPolicy Bypass -File .\deploy\install_windows_tasks.ps1
@@ -19,9 +21,10 @@ $WslProjectRoot = "/mnt/k/trading"
 
 $TaskLauncher = "JayTrading-Launcher"
 $TaskWatchdog = "JayTrading-Watchdog"
+$TaskMorningCheck = "JayTrading-MorningCheck"
 
 if ($Uninstall) {
-    foreach ($name in @($TaskLauncher, $TaskWatchdog)) {
+    foreach ($name in @($TaskLauncher, $TaskWatchdog, $TaskMorningCheck)) {
         try {
             Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop
             Write-Host "Removed $name"
@@ -40,6 +43,8 @@ $launcherAction = New-ScheduledTaskAction -Execute "wsl.exe" `
     -Argument "-- bash $WslProjectRoot/deploy/start_scheduler.sh"
 $watchdogAction = New-ScheduledTaskAction -Execute "wsl.exe" `
     -Argument "-- bash $WslProjectRoot/deploy/watchdog.sh"
+$morningCheckAction = New-ScheduledTaskAction -Execute "wsl.exe" `
+    -Argument "-- bash $WslProjectRoot/deploy/morning_check.sh"
 
 # --- Launcher: fires at user logon (OPTIONAL — needs an elevated prompt).
 # The watchdog alone covers startup within 5 minutes; if this registration
@@ -100,10 +105,36 @@ Register-ScheduledTask `
     -Force | Out-Null
 Write-Host "Registered $TaskWatchdog"
 
+# --- Morning check: weekdays at 10:15 machine-local time (ET on this host) ---
+# A Weekly trigger DOES support DaysOfWeek (unlike the -Once trigger that
+# broke the original watchdog), so no repetition grafting is needed. Runs
+# after the 09:35 execute tick + 10:00 reconcile have settled. Read-only;
+# writes a report to the vault verifications/ folder.
+$morningTrigger = New-ScheduledTaskTrigger -Weekly `
+    -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday `
+    -At "10:15"
+$morningSettings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable `
+    -MultipleInstances IgnoreNew `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+
+Register-ScheduledTask `
+    -TaskName $TaskMorningCheck `
+    -Action $morningCheckAction `
+    -Trigger $morningTrigger `
+    -Settings $morningSettings `
+    -Description "Unattended jay-trading morning verification -> vault verifications/" `
+    -Force | Out-Null
+Write-Host "Registered $TaskMorningCheck"
+
 Write-Host ""
 Write-Host "Installed. The watchdog starts the scheduler within 5 minutes if dead."
-Write-Host "To start it right now:"
+Write-Host "The morning check runs weekdays 10:15 and writes verifications/_latest.md."
+Write-Host "To run either right now:"
 Write-Host "  schtasks /run /tn $TaskWatchdog"
+Write-Host "  schtasks /run /tn $TaskMorningCheck"
 Write-Host ""
 Write-Host "Verify:"
 Write-Host "  Get-ScheduledTask JayTrading-*"
