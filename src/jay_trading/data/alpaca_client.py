@@ -99,6 +99,12 @@ class AlpacaPaperClient:
     def get_positions(self) -> list[Any]:
         return list(self._client.get_all_positions())
 
+    @_tracked("get_clock")
+    def get_clock(self) -> Any:
+        """Market clock: ``.is_open`` plus next open/close. Used to gate
+        entry/stop jobs on holidays and half-days."""
+        return self._client.get_clock()
+
     @_tracked("get_orders")
     def get_orders(self, status: str = "all", after: str | None = None) -> list[Any]:
         from alpaca.trading.requests import GetOrdersRequest

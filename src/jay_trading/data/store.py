@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -150,6 +150,34 @@ def record_signal(
         return _do(session)
     with session_scope() as s:
         return _do(s)
+
+
+def expire_stale_signals(max_age_days: int) -> int:
+    """Retire unacted signals older than ``max_age_days``.
+
+    Disclosure-cluster information decays within days; without an expiry the
+    unacted queue grows forever and a scheduler outage turns it into a bomb —
+    on restart, weeks-old signals would be traded at today's prices.
+
+    Reuses the existing columns rather than migrating: ``acted_on=True`` with
+    ``acted_order_id="expired"`` marks the row as consumed-without-an-order.
+    Returns the number of rows expired.
+    """
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=max_age_days)
+    expired = 0
+    with session_scope() as s:
+        rows = list(
+            s.scalars(
+                select(models.Signal)
+                .where(models.Signal.acted_on.is_(False))
+                .where(models.Signal.generated_at < cutoff)
+            )
+        )
+        for row in rows:
+            row.acted_on = True
+            row.acted_order_id = "expired"
+            expired += 1
+    return expired
 
 
 def record_risk_event(
@@ -380,5 +408,6 @@ def sector_position_count(sector: str) -> int:
                 models.TickerProfile.ticker == models.Position.ticker,
             )
             .where(models.TickerProfile.sector == sector)
+            .where(models.Position.closed_at.is_(None))
         ) or 0
         return int(count)

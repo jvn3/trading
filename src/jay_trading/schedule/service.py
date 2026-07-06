@@ -107,23 +107,28 @@ def build_scheduler() -> BlockingScheduler:
         },
     )
 
+    # NOTE: every CronTrigger gets an explicit timezone=TZ. Passing a trigger
+    # *instance* to add_job bypasses the scheduler-level timezone, and a bare
+    # CronTrigger falls back to the host-local zone — on a WSL box that may be
+    # UTC, shifting every job by hours. See audit-2026-07-05.
+
     # Morning: ingest → classify macro regime → generate signals →
     # (markets open at 09:30 ET) → execute.
-    sched.add_job(_wrapped(jobs.ingest_disclosures), CronTrigger(hour=8, minute=30, day_of_week="mon-fri"))
-    sched.add_job(_wrapped(jobs.classify_macro_regime), CronTrigger(hour=8, minute=35, day_of_week="mon-fri"))
-    sched.add_job(_wrapped(jobs.generate_signals), CronTrigger(hour=8, minute=40, day_of_week="mon-fri"))
-    sched.add_job(_wrapped(jobs.execute_strategies), CronTrigger(hour=9, minute=35, day_of_week="mon-fri"))
+    sched.add_job(_wrapped(jobs.ingest_disclosures), CronTrigger(hour=8, minute=30, day_of_week="mon-fri", timezone=TZ))
+    sched.add_job(_wrapped(jobs.classify_macro_regime), CronTrigger(hour=8, minute=35, day_of_week="mon-fri", timezone=TZ))
+    sched.add_job(_wrapped(jobs.generate_signals), CronTrigger(hour=8, minute=40, day_of_week="mon-fri", timezone=TZ))
+    sched.add_job(_wrapped(jobs.execute_strategies), CronTrigger(hour=9, minute=35, day_of_week="mon-fri", timezone=TZ))
 
     # Intraday stop management
-    sched.add_job(_wrapped(jobs.manage_stops), CronTrigger(hour="10-15", minute="*/15", day_of_week="mon-fri"))
+    sched.add_job(_wrapped(jobs.manage_stops), CronTrigger(hour="10-15", minute="*/15", day_of_week="mon-fri", timezone=TZ))
 
     # Reconcile + equity snapshot + EOD summary
-    sched.add_job(_wrapped(jobs.reconcile_now), CronTrigger(hour=15, minute=55, day_of_week="mon-fri"))
-    sched.add_job(_wrapped(jobs.snapshot_equity_and_prune), CronTrigger(hour=16, minute=5, day_of_week="mon-fri"))
-    sched.add_job(_wrapped(jobs.write_eod_summary), CronTrigger(hour=16, minute=10, day_of_week="mon-fri"))
+    sched.add_job(_wrapped(jobs.reconcile_now), CronTrigger(hour=15, minute=55, day_of_week="mon-fri", timezone=TZ))
+    sched.add_job(_wrapped(jobs.snapshot_equity_and_prune), CronTrigger(hour=16, minute=5, day_of_week="mon-fri", timezone=TZ))
+    sched.add_job(_wrapped(jobs.write_eod_summary), CronTrigger(hour=16, minute=10, day_of_week="mon-fri", timezone=TZ))
 
     # Heartbeat every 5 min so the watchdog can detect a stuck process.
-    sched.add_job(_heartbeat, CronTrigger(minute="*/5"))
+    sched.add_job(_heartbeat, CronTrigger(minute="*/5", timezone=TZ))
 
     return sched
 

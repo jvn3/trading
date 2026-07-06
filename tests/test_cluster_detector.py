@@ -1,7 +1,13 @@
-"""Tests for cluster detection (pure logic on a controlled DB)."""
+"""Tests for cluster detection (pure logic on a controlled DB).
+
+Dates are RELATIVE to today: ``find_clusters`` looks back 42 days from the
+real clock, so hardcoded calendar dates rot — the original April-2026
+fixtures started failing wholesale in late May 2026 once they fell out of
+the lookback window.
+"""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -14,6 +20,10 @@ from jay_trading.signals.cluster_detector import (
     upsert_signals,
 )
 from jay_trading.signals.politician_scorer import PoliticianScore
+
+
+def _d(days_ago: int) -> date:
+    return date.today() - timedelta(days=days_ago)
 
 
 def _row(source: str, person: str, ticker: str, side: str, tx: date, filed: date,
@@ -38,6 +48,14 @@ def _row(source: str, person: str, ticker: str, side: str, tx: date, filed: date
     return row
 
 
+def _congress_pair(ticker: str, a: str = "Alice", b: str = "Bob") -> list[dict]:
+    """Two politicians filing buys on the same ticker within the 14-day window."""
+    return [
+        _row("senate", a, ticker, "buy", _d(9), _d(4)),
+        _row("house", b, ticker, "buy", _d(6), _d(2)),
+    ]
+
+
 @pytest.fixture
 def scores() -> dict[str, PoliticianScore]:
     """Neutral scores so tests exercise cluster logic, not scorer logic."""
@@ -50,10 +68,7 @@ def scores() -> dict[str, PoliticianScore]:
 
 def test_two_distinct_buyers_same_ticker_form_a_cluster(scores) -> None:
     create_all()
-    store.upsert_disclosed_trades([
-        _row("senate", "Alice", "NVDA", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house", "Bob", "NVDA", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(_congress_pair("NVDA"))
     clusters = find_clusters(scores=scores)
     nvda_long = [c for c in clusters if c.ticker == "NVDA" and c.direction == "long"]
     assert nvda_long, "expected a long cluster on NVDA"
@@ -65,7 +80,7 @@ def test_two_distinct_buyers_same_ticker_form_a_cluster(scores) -> None:
 def test_single_politician_does_not_form_a_cluster(scores) -> None:
     create_all()
     store.upsert_disclosed_trades([
-        _row("senate", "Alice", "AAPL", "buy", date(2026, 4, 5), date(2026, 4, 10)),
+        _row("senate", "Alice", "AAPL", "buy", _d(9), _d(4)),
     ])
     clusters = find_clusters(scores=scores)
     assert not [c for c in clusters if c.ticker == "AAPL"]
@@ -74,8 +89,8 @@ def test_single_politician_does_not_form_a_cluster(scores) -> None:
 def test_mixed_direction_does_not_form_a_cluster(scores) -> None:
     create_all()
     store.upsert_disclosed_trades([
-        _row("senate", "Alice", "TSLA", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house", "Bob", "TSLA", "sell", date(2026, 4, 8), date(2026, 4, 14)),
+        _row("senate", "Alice", "TSLA", "buy", _d(9), _d(4)),
+        _row("house", "Bob", "TSLA", "sell", _d(6), _d(2)),
     ])
     clusters = find_clusters(scores=scores)
     tsla = [c for c in clusters if c.ticker == "TSLA"]
@@ -86,11 +101,12 @@ def test_mixed_direction_does_not_form_a_cluster(scores) -> None:
 
 def test_trades_outside_window_do_not_cluster(scores) -> None:
     create_all()
+    # Both filings inside the 42-day lookback, but 38 days apart — well past
+    # the 14-day clustering window.
     store.upsert_disclosed_trades([
-        _row("senate", "Alice", "GOOG", "buy", date(2026, 3, 1), date(2026, 3, 5)),
-        _row("house", "Bob", "GOOG", "buy", date(2026, 4, 18), date(2026, 4, 19)),
+        _row("senate", "Alice", "GOOG", "buy", _d(44), _d(40)),
+        _row("house", "Bob", "GOOG", "buy", _d(3), _d(2)),
     ])
-    # 45 days apart: should not cluster within the 14-day filing window.
     clusters = find_clusters(scores=scores)
     goog = [c for c in clusters if c.ticker == "GOOG" and c.direction == "long"]
     assert not goog
@@ -98,10 +114,7 @@ def test_trades_outside_window_do_not_cluster(scores) -> None:
 
 def test_upsert_signals_is_idempotent(scores) -> None:
     create_all()
-    store.upsert_disclosed_trades([
-        _row("senate", "Alice", "META", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house", "Bob", "META", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(_congress_pair("META"))
     clusters = find_clusters(scores=scores)
     n1 = upsert_signals(clusters)
     n2 = upsert_signals(clusters)
@@ -112,9 +125,9 @@ def test_upsert_signals_is_idempotent(scores) -> None:
 def test_committee_bonus_applies_when_relevant(scores) -> None:
     create_all()
     # LMT is in "armed services" mapping; role contains "armed services".
-    row1 = _row("senate", "Alice", "LMT", "buy", date(2026, 4, 5), date(2026, 4, 10))
+    row1 = _row("senate", "Alice", "LMT", "buy", _d(9), _d(4))
     row1["person_role"] = "Armed Services Committee"
-    row2 = _row("house", "Bob", "LMT", "buy", date(2026, 4, 8), date(2026, 4, 14))
+    row2 = _row("house", "Bob", "LMT", "buy", _d(6), _d(2))
     store.upsert_disclosed_trades([row1, row2])
     clusters = find_clusters(scores=scores)
     lmt = [c for c in clusters if c.ticker == "LMT" and c.direction == "long"]
@@ -134,10 +147,7 @@ def test_conviction_bonus_fires_when_member_has_strong_record() -> None:
         "Dave": PoliticianScore("Dave", 0.08, 5, True),
         "Eve":  PoliticianScore("Eve", 0.01, 3, True),
     }
-    store.upsert_disclosed_trades([
-        _row("senate", "Dave", "AVGO", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house",  "Eve",  "AVGO", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(_congress_pair("AVGO", a="Dave", b="Eve"))
     clusters = find_clusters(scores=high_conviction_scores)
     avgo = [c for c in clusters if c.ticker == "AVGO" and c.direction == "long"]
     assert avgo
@@ -154,10 +164,7 @@ def test_conviction_bonus_skipped_when_no_strong_record() -> None:
         "Frank": PoliticianScore("Frank", 0.04, 2, True),
         "Gail":  PoliticianScore("Gail",  0.02, 2, True),
     }
-    store.upsert_disclosed_trades([
-        _row("senate", "Frank", "INTC", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house",  "Gail",  "INTC", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(_congress_pair("INTC", a="Frank", b="Gail"))
     clusters = find_clusters(scores=weak_scores)
     intc = [c for c in clusters if c.ticker == "INTC" and c.direction == "long"]
     assert intc
@@ -170,16 +177,20 @@ def test_conviction_bonus_skipped_when_no_strong_record() -> None:
 # ---- Knob 3: insider co-buying confluence ------------------------------
 
 
+def _insider_pair(ticker: str, side: str = "buy") -> list[dict]:
+    """Two distinct insiders trading the ticker within the 30-day lookback."""
+    return [
+        _row("insider", "Insider A", ticker, side, _d(13), _d(12)),
+        _row("insider", "Insider B", ticker, side, _d(11), _d(10)),
+    ]
+
+
 def test_insider_confluence_bonus_fires_with_two_insider_buys() -> None:
     create_all()
-    # Two insider BUYS on AAPL within the lookback window.
-    store.upsert_disclosed_trades([
-        _row("insider", "Insider A", "AAPL", "buy", date(2026, 4, 1), date(2026, 4, 2)),
-        _row("insider", "Insider B", "AAPL", "buy", date(2026, 4, 3), date(2026, 4, 4)),
-        # Plus a 2-politician congress cluster on the same ticker.
-        _row("senate", "Helen", "AAPL", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house",  "Ian",   "AAPL", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(
+        _insider_pair("AAPL")
+        + _congress_pair("AAPL", a="Helen", b="Ian")
+    )
     scores = {
         "Helen": PoliticianScore("Helen", 0.02, 2, True),
         "Ian":   PoliticianScore("Ian",   0.01, 2, True),
@@ -197,12 +208,10 @@ def test_insider_confluence_bonus_fires_with_two_insider_buys() -> None:
 def test_insider_confluence_skipped_when_only_sells_on_ticker() -> None:
     create_all()
     # Insider activity is sells-only — does not count toward confluence.
-    store.upsert_disclosed_trades([
-        _row("insider", "Insider A", "MU", "sell", date(2026, 4, 1), date(2026, 4, 2)),
-        _row("insider", "Insider B", "MU", "sell", date(2026, 4, 3), date(2026, 4, 4)),
-        _row("senate", "Jane", "MU", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house",  "Ken",  "MU", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(
+        _insider_pair("MU", side="sell")
+        + _congress_pair("MU", a="Jane", b="Ken")
+    )
     scores = {
         "Jane": PoliticianScore("Jane", 0.02, 2, True),
         "Ken":  PoliticianScore("Ken",  0.01, 2, True),
@@ -218,12 +227,10 @@ def test_insider_confluence_skipped_when_only_sells_on_ticker() -> None:
 def test_all_knobs_compose_for_max_lift() -> None:
     create_all()
     # 2 politicians, one high-conviction, with insider co-buying.
-    store.upsert_disclosed_trades([
-        _row("insider", "Insider X", "ASML", "buy", date(2026, 4, 1), date(2026, 4, 2)),
-        _row("insider", "Insider Y", "ASML", "buy", date(2026, 4, 3), date(2026, 4, 4)),
-        _row("senate", "Liam", "ASML", "buy", date(2026, 4, 5), date(2026, 4, 10)),
-        _row("house",  "Mia",  "ASML", "buy", date(2026, 4, 8), date(2026, 4, 14)),
-    ])
+    store.upsert_disclosed_trades(
+        _insider_pair("ASML")
+        + _congress_pair("ASML", a="Liam", b="Mia")
+    )
     scores = {
         "Liam": PoliticianScore("Liam", 0.10, 6, True),  # high conviction
         "Mia":  PoliticianScore("Mia",  0.02, 2, True),

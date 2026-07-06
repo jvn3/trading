@@ -6,7 +6,7 @@ counters so the scheduler can log progress.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -32,6 +32,65 @@ from jay_trading.vault.writer import write_vault_file
 log = logging.getLogger(__name__)
 
 STRATEGIES = [SmartCopyStrategy(), InsiderFollowStrategy()]
+
+# Disclosure-cluster signals decay fast; anything older than this is noise.
+# ~5 trading days. Signals past the cutoff are marked expired so they stop
+# rescanning forever (the 2026-05→07 outage left a 23-signal restart bomb).
+SIGNAL_MAX_AGE_DAYS = 7
+
+# A macro-regime snapshot older than this is treated as missing. On missing/
+# stale we size at MODERATE (0.75), not FULL (1.0): unknown conditions should
+# not get maximum size. See audit-2026-07-05 (54-day-old FULL_RISK_ON).
+REGIME_MAX_AGE_HOURS = 24
+STALE_REGIME_MULTIPLIER = 0.75
+
+
+def _utcnow_naive() -> datetime:
+    """Naive-UTC now, matching how SQLite round-trips our DateTime columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _effective_regime_multiplier(
+    regime_snap: object | None, *, now: datetime | None = None
+) -> tuple[str | None, float]:
+    """Resolve (regime_name, sizing multiplier) with a staleness bound.
+
+    Returns ``(None, STALE_REGIME_MULTIPLIER)`` when the snapshot is missing
+    or older than ``REGIME_MAX_AGE_HOURS``.
+    """
+    now = now or _utcnow_naive()
+    if regime_snap is None:
+        log.warning(
+            "macro_regime: no snapshot — sizing at %.2f (moderate)",
+            STALE_REGIME_MULTIPLIER,
+        )
+        return None, STALE_REGIME_MULTIPLIER
+    snap_ts = getattr(regime_snap, "ts", None)
+    if snap_ts is not None and snap_ts.tzinfo is not None:
+        snap_ts = snap_ts.astimezone(timezone.utc).replace(tzinfo=None)
+    if snap_ts is None or (now - snap_ts) > timedelta(hours=REGIME_MAX_AGE_HOURS):
+        log.warning(
+            "macro_regime: snapshot stale (ts=%s, max %dh) — sizing at %.2f (moderate)",
+            snap_ts, REGIME_MAX_AGE_HOURS, STALE_REGIME_MULTIPLIER,
+        )
+        return None, STALE_REGIME_MULTIPLIER
+    name = str(regime_snap.regime)
+    return name, macro_regime.sizing_multiplier(name)
+
+
+def _market_is_open(alpaca: AlpacaPaperClient) -> bool:
+    """Alpaca market clock gate for entry/stop jobs.
+
+    Fail-soft: if the clock call errors we return True (the pre-existing
+    behavior was no calendar check at all; on a holiday the DAY orders just
+    queue to the next open, which is annoying but not dangerous).
+    """
+    try:
+        clock = alpaca.get_clock()
+        return bool(clock.is_open)
+    except Exception as e:  # noqa: BLE001
+        log.warning("market clock check failed (%s) — assuming open", e)
+        return True
 
 
 # -- Existing Phase 1 ingest (kept) -----------------------------------------
@@ -144,11 +203,13 @@ def generate_signals() -> dict[str, int]:
 
 
 def _unacted_signals() -> list[SignalView]:
+    cutoff = _utcnow_naive() - timedelta(days=SIGNAL_MAX_AGE_DAYS)
     with session_scope() as s:
         rows = list(
             s.scalars(
                 select(models.Signal)
                 .where(models.Signal.acted_on.is_(False))
+                .where(models.Signal.generated_at >= cutoff)
                 .order_by(models.Signal.score.desc())
             )
         )
@@ -178,11 +239,29 @@ def execute_strategies() -> dict[str, int]:
 
     Strategy V macro regime: read the most recent regime snapshot and apply
     its sizing multiplier. A ``RISK_OFF_CRISIS`` regime (multiplier 0.0)
-    short-circuits all new opens. A missing snapshot fails open to 1.0.
+    short-circuits all new opens. A missing or stale (>24h) snapshot sizes
+    at the MODERATE multiplier, not full.
     """
     create_all()
-    signals = _unacted_signals()
     alpaca = AlpacaPaperClient()
+
+    if not _market_is_open(alpaca):
+        log.info("execute_strategies: market closed (holiday/half-day) — skipping tick")
+        return {"submitted": 0, "rejected": 0, "gated_trips": 0, "market_closed": 1}
+
+    # Retire signals that outlived their information edge before selecting.
+    expired = store.expire_stale_signals(max_age_days=SIGNAL_MAX_AGE_DAYS)
+    if expired:
+        log.info("execute_strategies: expired %d stale signals (> %d days)",
+                 expired, SIGNAL_MAX_AGE_DAYS)
+        store.record_risk_event(
+            kind="signal_expiry",
+            severity="info",
+            reason=f"expired {expired} signals older than {SIGNAL_MAX_AGE_DAYS} days",
+            payload={"count": expired, "max_age_days": SIGNAL_MAX_AGE_DAYS},
+        )
+
+    signals = _unacted_signals()
     portfolio = portfolio_mod.build_snapshot(alpaca)
 
     fmp = FMPClient()
@@ -194,16 +273,9 @@ def execute_strategies() -> dict[str, int]:
         log.exception("pipeline gate evaluation crashed — passing (fail-open): %s", e)
         pipeline = guards.PipelineDecision(allow_entries=True, trips=[])
 
-    # Strategy V: look up the latest macro regime once per tick.
-    regime_snap = store.latest_macro_regime()
-    if regime_snap is None:
-        log.warning(
-            "macro_regime: no snapshot yet — sizing multiplier defaulting to 1.0"
-        )
-        regime_name = None
-    else:
-        regime_name = regime_snap.regime
-    regime_mult = macro_regime.sizing_multiplier(regime_name)
+    # Strategy V: look up the latest macro regime once per tick, with a
+    # staleness bound (missing/stale → MODERATE sizing, never full).
+    regime_name, regime_mult = _effective_regime_multiplier(store.latest_macro_regime())
 
     submitted = 0
     rejected = 0
@@ -296,15 +368,32 @@ def manage_stops() -> dict[str, int]:
     """Software-side stop management (Alpaca doesn't stop-order fractionals)."""
     create_all()
     alpaca = AlpacaPaperClient()
+
+    if not _market_is_open(alpaca):
+        log.info("manage_stops: market closed — skipping tick")
+        return {"closed": 0, "market_closed": 1}
+
     portfolio = portfolio_mod.build_snapshot(alpaca)
     closed = 0
     for strat in STRATEGIES:
         if not strat.enabled:
             continue
-        intents = strat.manage_positions(
-            [p for p in portfolio.positions if p.strategy_name == strat.name],
-            portfolio,
-        )
+        # Per-strategy isolation: one strategy's crash must not discard the
+        # other strategies' exit intents (stop enforcement shares no fate).
+        try:
+            intents = strat.manage_positions(
+                [p for p in portfolio.positions if p.strategy_name == strat.name],
+                portfolio,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.exception("manage_positions crashed for %s: %s", strat.name, e)
+            store.record_risk_event(
+                kind="manage_stops_error",
+                severity="warn",
+                reason=f"{strat.name}.manage_positions raised: {e}",
+                strategy_name=strat.name,
+            )
+            continue
         for intent in intents:
             try:
                 order_builder.submit_intent(intent, alpaca=alpaca)
@@ -402,7 +491,11 @@ def write_eod_summary() -> dict[str, int]:
                 .where(models.Order.submitted_at >= datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc))
             )
         )
-        todays_positions = list(s.scalars(select(models.Position)))
+        todays_positions = list(
+            s.scalars(
+                select(models.Position).where(models.Position.closed_at.is_(None))
+            )
+        )
     lines: list[str] = [
         "---",
         "type: briefing",

@@ -32,12 +32,18 @@ if ($Uninstall) {
     exit 0
 }
 
-# Command that launches the scheduler in the background via WSL's default distro.
-$LaunchCommand = "wsl.exe -- bash -lc 'cd $WslProjectRoot && bash deploy/start_scheduler.sh &'"
-$WatchdogCommand = "wsl.exe -- bash -lc 'cd $WslProjectRoot && bash deploy/watchdog.sh'"
+# Task actions run wsl.exe DIRECTLY with plain arguments. The old version
+# went through `cmd.exe /c ... && ...` — cmd does not honor single quotes, so
+# it split the command at `&&` and the task always exited with code 2.
+# Both scripts cd to the repo root themselves, so no `cd` is needed here.
+$launcherAction = New-ScheduledTaskAction -Execute "wsl.exe" `
+    -Argument "-- bash $WslProjectRoot/deploy/start_scheduler.sh"
+$watchdogAction = New-ScheduledTaskAction -Execute "wsl.exe" `
+    -Argument "-- bash $WslProjectRoot/deploy/watchdog.sh"
 
-# --- Launcher: fires at user logon ---
-$launcherAction  = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c $LaunchCommand"
+# --- Launcher: fires at user logon (OPTIONAL — needs an elevated prompt).
+# The watchdog alone covers startup within 5 minutes; if this registration
+# fails without admin rights we warn and continue rather than abort.
 $launcherTrigger = New-ScheduledTaskTrigger -AtLogOn
 $launcherSettings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
@@ -45,31 +51,45 @@ $launcherSettings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -MultipleInstances IgnoreNew
 
-Register-ScheduledTask `
-    -TaskName $TaskLauncher `
-    -Action $launcherAction `
-    -Trigger $launcherTrigger `
-    -Settings $launcherSettings `
-    -Description "Launch jay-trading APScheduler via WSL at user logon" `
-    -Force | Out-Null
-Write-Host "Registered $TaskLauncher"
+try {
+    Register-ScheduledTask `
+        -TaskName $TaskLauncher `
+        -Action $launcherAction `
+        -Trigger $launcherTrigger `
+        -Settings $launcherSettings `
+        -Description "Launch jay-trading APScheduler via WSL at user logon" `
+        -Force -ErrorAction Stop | Out-Null
+    Write-Host "Registered $TaskLauncher"
+} catch {
+    Write-Host "WARNING: could not register $TaskLauncher ($_)."
+    Write-Host "         Logon triggers need an elevated prompt; the watchdog covers startup anyway."
+}
 
-# --- Watchdog: every 5 min between 08:00 and 17:00 local time, Mon-Fri ---
-# (Scheduler process lives outside those hours too for overnight jobs, but we
-# only need active restarts during market+ingest hours.)
-$watchdogAction = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c $WatchdogCommand"
-$watchdogTrigger = New-ScheduledTaskTrigger `
+# --- Watchdog: every 5 min, all day, every day ---
+# History: the original version used a -Once trigger and then assigned
+# .DaysOfWeek on it, which (a) threw (MSFT_TaskTimeTrigger has no DaysOfWeek)
+# so the task was never registered, and (b) even without the throw, a -Once
+# trigger's repetition window only spans its single start day. Result: the
+# scheduler died 2026-05-13 and nothing restarted it for 53 days.
+#
+# Correct pattern: a -Daily trigger, with the repetition block grafted from a
+# throwaway -Once trigger (New-ScheduledTaskTrigger -Daily does not accept
+# -RepetitionInterval directly on Windows PowerShell 5.1). Running the check
+# 24/7 is intentional — it is cheap, and the heartbeat check in watchdog.sh
+# also catches hung-but-alive schedulers.
+$watchdogTrigger = New-ScheduledTaskTrigger -Daily -At "00:02"
+$repetitionSource = New-ScheduledTaskTrigger `
     -Once `
-    -At ((Get-Date).Date.AddHours(8)) `
+    -At "00:02" `
     -RepetitionInterval (New-TimeSpan -Minutes 5) `
-    -RepetitionDuration (New-TimeSpan -Hours 9)
-$watchdogTrigger.DaysOfWeek = "Monday, Tuesday, Wednesday, Thursday, Friday"
+    -RepetitionDuration (New-TimeSpan -Hours 23 -Minutes 55)
+$watchdogTrigger.Repetition = $repetitionSource.Repetition
 $watchdogSettings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
     -MultipleInstances IgnoreNew `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 3)
 
 Register-ScheduledTask `
     -TaskName $TaskWatchdog `
@@ -81,9 +101,9 @@ Register-ScheduledTask `
 Write-Host "Registered $TaskWatchdog"
 
 Write-Host ""
-Write-Host "Installed. The launcher will start the scheduler next time you log in."
-Write-Host "To start it now without logging out:"
-Write-Host "  $LaunchCommand"
+Write-Host "Installed. The watchdog starts the scheduler within 5 minutes if dead."
+Write-Host "To start it right now:"
+Write-Host "  schtasks /run /tn $TaskWatchdog"
 Write-Host ""
 Write-Host "Verify:"
 Write-Host "  Get-ScheduledTask JayTrading-*"

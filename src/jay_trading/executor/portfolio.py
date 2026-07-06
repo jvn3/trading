@@ -16,7 +16,11 @@ log = logging.getLogger(__name__)
 
 def _our_position_rows() -> dict[str, models.Position]:
     with session_scope() as s:
-        rows = list(s.scalars(select(models.Position)))
+        rows = list(
+            s.scalars(
+                select(models.Position).where(models.Position.closed_at.is_(None))
+            )
+        )
         for r in rows:
             s.expunge(r)
     return {r.ticker.upper(): r for r in rows}
@@ -35,6 +39,12 @@ def build_snapshot(alpaca: AlpacaPaperClient | None = None) -> PortfolioSnapshot
             current_price = float(p.current_price) if p.current_price else float(p.avg_entry_price)
         except (TypeError, ValueError):
             current_price = float(p.avg_entry_price or 0.0)
+        # SQLite drops tzinfo on DateTime(timezone=True) round-trips; normalize
+        # to aware-UTC here so downstream date math (e.g. max-hold checks)
+        # never mixes naive and aware datetimes.
+        opened_at = meta.opened_at if meta else None
+        if opened_at is not None and opened_at.tzinfo is None:
+            opened_at = opened_at.replace(tzinfo=timezone.utc)
         positions.append(
             PositionView(
                 ticker=tic,
@@ -48,7 +58,7 @@ def build_snapshot(alpaca: AlpacaPaperClient | None = None) -> PortfolioSnapshot
                 hard_stop=meta.hard_stop if meta else None,
                 trail_peak=meta.trail_peak if meta else None,
                 trail_active=bool(meta.trail_active) if meta else False,
-                opened_at=meta.opened_at if meta else None,
+                opened_at=opened_at,
                 entry_signal_id=meta.entry_signal_id if meta else None,
             )
         )
