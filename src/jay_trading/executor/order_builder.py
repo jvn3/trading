@@ -15,7 +15,11 @@ from datetime import date
 from typing import Any
 
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest
+from alpaca.trading.requests import (
+    LimitOrderRequest,
+    MarketOrderRequest,
+    StopLossRequest,
+)
 
 from jay_trading.data import models
 from jay_trading.data.alpaca_client import AlpacaPaperClient
@@ -24,6 +28,90 @@ from jay_trading.strategies.base import TradeIntent
 from jay_trading.vault.writer import write_vault_file
 
 log = logging.getLogger(__name__)
+
+# Canonical slashless crypto symbols (Alpaca accepts both "BTC/USD" and
+# "BTCUSD" on submit but reports positions slashless; we standardize on
+# slashless everywhere so reconcile's ticker matching keeps working).
+CRYPTO_SYMBOLS = {"BTCUSD", "ETHUSD", "SOLUSD", "BTC/USD", "ETH/USD", "SOL/USD"}
+
+_TIF_MAP = {
+    "day": TimeInForce.DAY,
+    "gtc": TimeInForce.GTC,
+    "ioc": TimeInForce.IOC,
+}
+
+
+def is_crypto(ticker: str) -> bool:
+    return ticker.upper() in CRYPTO_SYMBOLS or "/" in ticker
+
+
+def _resolve_tif(intent: TradeIntent) -> TimeInForce:
+    """Crypto rejects DAY orders — force GTC there; otherwise honor the
+    intent (default day)."""
+    if is_crypto(intent.ticker):
+        tif = _TIF_MAP.get(intent.time_in_force.lower(), TimeInForce.GTC)
+        return tif if tif in (TimeInForce.GTC, TimeInForce.IOC) else TimeInForce.GTC
+    return _TIF_MAP.get(intent.time_in_force.lower(), TimeInForce.DAY)
+
+
+def _build_request(intent: TradeIntent, client_order_id: str) -> Any:
+    """TradeIntent → Alpaca order request.
+
+    Previously this always emitted a DAY market order and silently ignored
+    intent.order_type/limit_price/stop_price/time_in_force (dead fields per
+    audit-2026-07-05). Now:
+    - order_type="limit" + limit_price → LimitOrderRequest.
+    - stop_price on a whole-share equity BUY open → OTO market order with a
+      server-side stop-loss leg (fills the 15-min software-stop gap and the
+      overnight gap). Requires whole shares — Alpaca disallows legs on
+      fractional/notional orders — so callers wanting a stop leg must size
+      in whole-share qty.
+    - crypto → GTC (DAY unsupported).
+    """
+    side = OrderSide.BUY if intent.side == "buy" else OrderSide.SELL
+    tif = _resolve_tif(intent)
+    common: dict[str, Any] = {
+        "symbol": intent.ticker,
+        "side": side,
+        "time_in_force": tif,
+        "client_order_id": client_order_id,
+    }
+
+    if intent.order_type == "limit" and intent.limit_price is not None:
+        return LimitOrderRequest(
+            qty=intent.qty,
+            notional=intent.notional if intent.qty is None else None,
+            limit_price=float(intent.limit_price),
+            **common,
+        )
+
+    stop_leg_ok = (
+        intent.stop_price is not None
+        and intent.action == "open"
+        and side is OrderSide.BUY
+        and not is_crypto(intent.ticker)
+        and intent.qty is not None
+        and float(intent.qty) == int(intent.qty)  # whole shares only
+    )
+    if stop_leg_ok:
+        return MarketOrderRequest(
+            qty=intent.qty,
+            order_class="oto",
+            stop_loss=StopLossRequest(stop_price=float(intent.stop_price)),
+            **common,
+        )
+    if intent.stop_price is not None and not stop_leg_ok:
+        log.warning(
+            "stop_price on %s ignored (needs whole-share equity BUY open); "
+            "submitting plain market order — software stops still apply",
+            intent.ticker,
+        )
+
+    return MarketOrderRequest(
+        qty=intent.qty if intent.qty is not None else None,
+        notional=intent.notional if intent.qty is None else None,
+        **common,
+    )
 
 
 def build_client_order_id(intent: TradeIntent) -> str:
@@ -141,14 +229,7 @@ def submit_intent(
     alpaca = alpaca or AlpacaPaperClient()
 
     try:
-        req = MarketOrderRequest(
-            symbol=intent.ticker,
-            notional=intent.notional if intent.qty is None else None,
-            qty=intent.qty if intent.qty is not None else None,
-            side=OrderSide.BUY if intent.side == "buy" else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY,
-            client_order_id=client_order_id,
-        )
+        req = _build_request(intent, client_order_id)
         resp = alpaca.submit_order(req)
         alpaca_order_id = getattr(resp, "id", None)
         status = str(getattr(resp, "status", "submitted"))

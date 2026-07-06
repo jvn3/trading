@@ -38,6 +38,7 @@ def size_intent(
     max_concurrent: int = DEFAULT_MAX_CONCURRENT,
     *,
     regime_multiplier: float = 1.0,
+    max_spend: float | None = None,
 ) -> SizingDecision:
     """Apply position-size cap + concurrency cap to an *open*-action intent.
 
@@ -47,6 +48,12 @@ def size_intent(
     notional and the equity-based default. A multiplier of ``0.0`` short-
     circuits to ``REJECT`` with a ``regime_blocked`` reason. Values outside
     ``[0.0, 1.0]`` are clamped to avoid an upstream bug inflating sizes.
+
+    ``max_spend`` (allocator, portfolio-engine v2): the binding dollar limit
+    for NEW exposure from this sleeve — min(sleeve headroom, regime gross-
+    leverage headroom, buying power). When provided it REPLACES the legacy
+    cash*0.98 guard, which is what allows deliberate margin use in risk-on
+    regimes; when None the legacy cash-only behavior is preserved.
     """
     if intent.action != "open":
         return SizingDecision("APPROVE", intent)
@@ -99,8 +106,12 @@ def size_intent(
     # Never exceed hard cap.
     target_notional = min(target_notional, hard_cap)
 
-    # Cash availability sanity: leave a small buffer.
-    if target_notional > portfolio.cash * 0.98:
+    if max_spend is not None:
+        # Allocator-provided spend limit (already accounts for buying power
+        # and regime leverage caps).
+        target_notional = round(min(target_notional, max_spend), 2)
+    elif target_notional > portfolio.cash * 0.98:
+        # Legacy cash-only guard for callers without an allocator decision.
         target_notional = round(portfolio.cash * 0.95, 2)
 
     # Discard intents that collapse to near-zero (less than $10 is noise).

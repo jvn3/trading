@@ -16,7 +16,7 @@ from jay_trading.data.db import create_all, get_engine, session_scope
 from jay_trading.data.fmp import FMPClient, normalize, since_window_days
 from jay_trading.data.fred import FREDClient
 from jay_trading.executor import order_builder, portfolio as portfolio_mod, reconcile
-from jay_trading.risk import guards, macro_regime
+from jay_trading.risk import allocator, guards, macro_regime
 from jay_trading.risk.sizing import size_intent
 from jay_trading.signals.cluster_detector import find_clusters, upsert_signals
 from jay_trading.signals.insider_cluster_detector import (
@@ -24,14 +24,19 @@ from jay_trading.signals.insider_cluster_detector import (
     upsert_insider_signals,
 )
 from jay_trading.strategies.base import SignalView
+from jay_trading.strategies.crypto_momentum import CryptoMomentumStrategy
 from jay_trading.strategies.insider_follow import InsiderFollowStrategy
+from jay_trading.strategies.s1_rotation import S1RotationStrategy
 from jay_trading.strategies.smart_copy import SmartCopyStrategy
 from jay_trading.vault.templates import render_data_briefing
 from jay_trading.vault.writer import write_vault_file
 
 log = logging.getLogger(__name__)
 
-STRATEGIES = [SmartCopyStrategy(), InsiderFollowStrategy()]
+# Sleeve budgets for each live strategy live in risk/allocator.py.
+# crypto_momentum runs on its own 7-day job (execute_crypto), not here.
+STRATEGIES = [S1RotationStrategy(), SmartCopyStrategy(), InsiderFollowStrategy()]
+CRYPTO_STRATEGY = CryptoMomentumStrategy()
 
 # Disclosure-cluster signals decay fast; anything older than this is noise.
 # ~5 trading days. Signals past the cutoff are marked expired so they stop
@@ -230,6 +235,76 @@ def _unacted_signals() -> list[SignalView]:
     ]
 
 
+def _vet_and_submit(
+    strategy_name: str,
+    intents: list,
+    portfolio,
+    regime_name: str | None,
+    regime_mult: float,
+    *,
+    fmp: FMPClient | None,
+    alpaca: AlpacaPaperClient,
+) -> tuple[int, int]:
+    """Sector cap → allocator sleeve/leverage caps → sizing → submit.
+
+    Returns (submitted, rejected). Shared by the equity execute tick and the
+    7-day crypto tick.
+    """
+    submitted = 0
+    rejected = 0
+    # One allocator decision per strategy per tick. It bounds NEW exposure by
+    # sleeve budget (vol-targeted), regime gross-leverage cap, buying power.
+    alloc = allocator.sleeve_cap(strategy_name, portfolio, regime_name)
+    remaining_spend = alloc.max_spend
+    log.info(
+        "allocator[%s]: cap=$%.2f exposure=$%.2f max_spend=$%.2f vol_scale=%.2f",
+        strategy_name, alloc.cap_dollars, alloc.sleeve_exposure,
+        alloc.max_spend, alloc.vol_scale,
+    )
+    for intent in intents:
+        if intent.action == "open" and fmp is not None:
+            # Per-intent: sector-correlation cap (equities only).
+            cor = guards.check_correlation_cap(intent, portfolio, fmp=fmp)
+            if not cor.passed:
+                rejected += 1
+                log.info("sector-cap reject %s: %s", intent.ticker, cor.reason)
+                store.record_risk_event(
+                    kind="sizing_veto",
+                    severity="warn",
+                    reason=cor.reason,
+                    strategy_name=intent.strategy_name,
+                    ticker=intent.ticker,
+                    payload=cor.details,
+                )
+                continue
+        dec = size_intent(
+            intent, portfolio,
+            hard_cap_pct=alloc.per_position_cap_pct,
+            regime_multiplier=regime_mult,
+            max_spend=remaining_spend,
+        )
+        if dec.verdict == "REJECT" or dec.intent is None:
+            rejected += 1
+            log.info("reject %s %s: %s", intent.ticker, intent.side, dec.reason)
+            store.record_risk_event(
+                kind="sizing_veto",
+                reason=dec.reason,
+                strategy_name=intent.strategy_name,
+                ticker=intent.ticker,
+            )
+            continue
+        try:
+            order_builder.submit_intent(dec.intent, alpaca=alpaca)
+            submitted += 1
+            if dec.intent.action == "open" and dec.intent.notional:
+                # Decrement so multiple intents in one tick can't stack past
+                # the sleeve/leverage caps (the audit's 15%-in-one-name bug).
+                remaining_spend = max(0.0, remaining_spend - dec.intent.notional)
+        except Exception as e:  # noqa: BLE001
+            log.warning("submit failed for %s: %s", intent.ticker, e)
+    return submitted, rejected
+
+
 def execute_strategies() -> dict[str, int]:
     """Generate intents, size them, and submit to Alpaca paper.
 
@@ -270,8 +345,17 @@ def execute_strategies() -> dict[str, int]:
             alpaca=alpaca, fmp=fmp, portfolio=portfolio,
         )
     except Exception as e:  # noqa: BLE001
-        log.exception("pipeline gate evaluation crashed — passing (fail-open): %s", e)
-        pipeline = guards.PipelineDecision(allow_entries=True, trips=[])
+        # Fail LOUD and CLOSED (M2): a broken risk layer must not mean
+        # "trade with zero checks". Entries blocked for this tick; exits
+        # unaffected (manage_stops runs separately).
+        log.exception("pipeline gate evaluation crashed — BLOCKING entries: %s", e)
+        store.record_risk_event(
+            kind="gate_error",
+            severity="halt",
+            reason=f"pipeline gate evaluation crashed: {e}",
+            payload={"error": repr(e)[:500]},
+        )
+        pipeline = guards.PipelineDecision(allow_entries=False, trips=[])
 
     # Strategy V: look up the latest macro regime once per tick, with a
     # staleness bound (missing/stale → MODERATE sizing, never full).
@@ -314,37 +398,12 @@ def execute_strategies() -> dict[str, int]:
                 "execute_strategies[%s]: %d raw intents from %d signals (regime_mult=%.2f)",
                 strat.name, len(intents), len(my_signals), regime_mult,
             )
-            for intent in intents:
-                # Per-intent: sector-correlation cap
-                cor = guards.check_correlation_cap(intent, portfolio, fmp=fmp)
-                if not cor.passed:
-                    rejected += 1
-                    log.info("sector-cap reject %s: %s", intent.ticker, cor.reason)
-                    store.record_risk_event(
-                        kind="sizing_veto",
-                        severity="warn",
-                        reason=cor.reason,
-                        strategy_name=intent.strategy_name,
-                        ticker=intent.ticker,
-                        payload=cor.details,
-                    )
-                    continue
-                dec = size_intent(intent, portfolio, regime_multiplier=regime_mult)
-                if dec.verdict == "REJECT" or dec.intent is None:
-                    rejected += 1
-                    log.info("reject %s %s: %s", intent.ticker, intent.side, dec.reason)
-                    store.record_risk_event(
-                        kind="sizing_veto",
-                        reason=dec.reason,
-                        strategy_name=intent.strategy_name,
-                        ticker=intent.ticker,
-                    )
-                    continue
-                try:
-                    order_builder.submit_intent(dec.intent, alpaca=alpaca)
-                    submitted += 1
-                except Exception as e:  # noqa: BLE001
-                    log.warning("submit failed for %s: %s", intent.ticker, e)
+            s, r = _vet_and_submit(
+                strat.name, intents, portfolio, regime_name, regime_mult,
+                fmp=fmp, alpaca=alpaca,
+            )
+            submitted += s
+            rejected += r
 
     # Refresh positions so the next `manage_stops` tick sees the new rows.
     try:
@@ -378,6 +437,9 @@ def manage_stops() -> dict[str, int]:
     for strat in STRATEGIES:
         if not strat.enabled:
             continue
+        if getattr(strat, "manages_out_of_band", False):
+            # e.g. crypto: managed by its own 7-day job, not this Mon-Fri loop.
+            continue
         # Per-strategy isolation: one strategy's crash must not discard the
         # other strategies' exit intents (stop enforcement shares no fate).
         try:
@@ -408,6 +470,63 @@ def manage_stops() -> dict[str, int]:
             log.warning("post-close reconcile failed: %s", e)
     log.info("manage_stops: closed=%d", closed)
     return {"closed": closed}
+
+
+def execute_crypto() -> dict[str, int]:
+    """S3 crypto tick: entries + exits, 7 days/week (no market-clock gate —
+    crypto never closes; the equity execute tick would skip weekends).
+
+    Same vetting pipeline as equities (allocator sleeve cap, regime
+    multiplier, sizing) minus the sector cap, which has no meaning here.
+    """
+    create_all()
+    strat = CRYPTO_STRATEGY
+    if not strat.enabled:
+        return {"submitted": 0, "closed": 0}
+    alpaca = AlpacaPaperClient()
+    portfolio = portfolio_mod.build_snapshot(alpaca)
+    regime_name, regime_mult = _effective_regime_multiplier(store.latest_macro_regime())
+
+    submitted = 0
+    rejected = 0
+    if regime_mult > 0.0:
+        intents = strat.generate_intents([], portfolio)
+        submitted, rejected = _vet_and_submit(
+            strat.name, intents, portfolio, regime_name, regime_mult,
+            fmp=None, alpaca=alpaca,
+        )
+
+    # Exits always run, regime notwithstanding.
+    closed = 0
+    try:
+        exits = strat.manage_positions(
+            [p for p in portfolio.positions if p.strategy_name == strat.name],
+            portfolio,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.exception("crypto manage_positions crashed: %s", e)
+        store.record_risk_event(
+            kind="manage_stops_error",
+            severity="warn",
+            reason=f"crypto_momentum.manage_positions raised: {e}",
+            strategy_name=strat.name,
+        )
+        exits = []
+    for intent in exits:
+        try:
+            order_builder.submit_intent(intent, alpaca=alpaca)
+            closed += 1
+        except Exception as e:  # noqa: BLE001
+            log.warning("crypto close submit failed for %s: %s", intent.ticker, e)
+
+    if submitted or closed:
+        try:
+            reconcile.reconcile_orders_and_positions(alpaca=alpaca)
+        except Exception as e:  # noqa: BLE001
+            log.warning("post-crypto reconcile failed: %s", e)
+    log.info("execute_crypto: submitted=%d rejected=%d closed=%d",
+             submitted, rejected, closed)
+    return {"submitted": submitted, "rejected": rejected, "closed": closed}
 
 
 def reconcile_now() -> dict[str, int]:
@@ -548,6 +667,7 @@ if __name__ == "__main__":
         "signals": generate_signals,
         "execute": execute_strategies,
         "stops": manage_stops,
+        "crypto": execute_crypto,
         "reconcile": reconcile_now,
         "snapshot": snapshot_equity_and_prune,
         "regime": classify_macro_regime,

@@ -66,6 +66,30 @@ def upsert_bars(ticker: str, rows: list[dict[str, Any]]) -> int:
     return inserted
 
 
+def get_closes(ticker: str, start: date, end: date | None = None) -> list[tuple[date, float]]:
+    """All cached (date, close) pairs for ``ticker`` in [start, end], ascending.
+
+    Used by the allocator's realized-vol estimate and the price-driven
+    strategies (S1 rotation, crypto momentum). Returns [] when uncached —
+    callers must treat that as "no signal", never as "flat prices".
+    """
+    from sqlalchemy import select
+
+    from jay_trading.data.db import session_scope
+
+    _ensure_table()
+    end = end or date.today()
+    with session_scope() as s:
+        stmt = (
+            select(PriceBar.bar_date, PriceBar.close)
+            .where(PriceBar.ticker == ticker.upper())
+            .where(PriceBar.bar_date >= start)
+            .where(PriceBar.bar_date <= end)
+            .order_by(PriceBar.bar_date.asc())
+        )
+        return [(d, float(c)) for d, c in s.execute(stmt).all()]
+
+
 def get_close_on_or_before(ticker: str, on: date) -> float | None:
     """Return the close for ``ticker`` on ``on``, or the nearest earlier trading day."""
     from sqlalchemy import select

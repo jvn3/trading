@@ -122,6 +122,10 @@ def build_scheduler() -> BlockingScheduler:
     # Intraday stop management
     sched.add_job(_wrapped(jobs.manage_stops), CronTrigger(hour="10-15", minute="*/15", day_of_week="mon-fri", timezone=TZ))
 
+    # S3 crypto tick: 7 days/week (crypto never closes — deliberately NO
+    # day_of_week gate). Daily EOD-signal cadence at 18:10 ET.
+    sched.add_job(_wrapped(jobs.execute_crypto), CronTrigger(hour=18, minute=10, timezone=TZ))
+
     # Reconcile + equity snapshot + EOD summary
     sched.add_job(_wrapped(jobs.reconcile_now), CronTrigger(hour=15, minute=55, day_of_week="mon-fri", timezone=TZ))
     sched.add_job(_wrapped(jobs.snapshot_equity_and_prune), CronTrigger(hour=16, minute=5, day_of_week="mon-fri", timezone=TZ))
