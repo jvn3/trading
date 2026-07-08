@@ -207,7 +207,7 @@
       <table>
         <thead>
           <tr>
-            <th>Time</th>
+            <th>Date/Time</th>
             <th>Ticker</th>
             <th>Side</th>
             <th class="num">$ / Qty</th>
@@ -342,7 +342,7 @@ function render(s) {
         : "—";
       const side = (o.side || "").toLowerCase();
       return `<tr>
-        <td>${fmtClock(o.submitted_at)}</td>
+        <td>${fmtDateTime(o.submitted_at)}</td>
         <td class="t-name"><b>${o.ticker}</b></td>
         <td><span class="pill ${side}">${side}</span></td>
         <td class="num">${amt}</td>
