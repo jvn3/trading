@@ -7,7 +7,13 @@ Run at 15:55 ET by the scheduler. Also triggered opportunistically after an
 Bookkeeping guarantees (added 2026-07-06, see development/audit-2026-07-05.md
 for the bugs this fixes):
 - Every filled order gets a ``fills`` row (order-level granularity: one row
-  per filled order, keyed ``alpaca_fill_id = str(order.id)``, idempotent).
+  per filled order, keyed on the Alpaca order id, idempotent).
+- Fills are recorded even for orders we never submitted through the executor —
+  ``liquidate_all``'s close-all legs, OTO/bracket stop-loss children, manual
+  closes — by backfilling a minimal ``external`` Order row so the fill has a
+  parent (``Fill.order_id`` is a non-nullable FK). Without this the fills
+  ledger silently dropped every out-of-band close (2026-07-07: 8 legacy
+  liquidation sells → only 1 fill row).
 - Closed positions are never deleted; they get ``closed_at`` / ``exit_price``
   / ``realized_pnl`` so per-trade and per-strategy P&L stay computable.
 - Orders are pulled over a trailing window (not just today), so a status
@@ -46,6 +52,14 @@ def _float_or_none(v: Any) -> float | None:
         return None
 
 
+def _enum_value(v: Any) -> str | None:
+    """Alpaca enums (``OrderType``/``OrderSide``) → their string ``value``
+    (e.g. ``"market"``), tolerating plain strings and ``None``."""
+    if v is None:
+        return None
+    return str(getattr(v, "value", v))
+
+
 def reconcile_orders_and_positions(alpaca: AlpacaPaperClient | None = None) -> dict[str, int]:
     alpaca = alpaca or AlpacaPaperClient()
 
@@ -64,6 +78,7 @@ def reconcile_orders_and_positions(alpaca: AlpacaPaperClient | None = None) -> d
 
     updated = 0
     fills_recorded = 0
+    backfilled = 0
     # Latest filled SELL per symbol → exit price for positions closed since
     # the last reconcile pass.
     last_sell: dict[str, tuple[datetime, float]] = {}
@@ -79,35 +94,64 @@ def reconcile_orders_and_positions(alpaca: AlpacaPaperClient | None = None) -> d
                 if prev is None or filled_at > prev[0]:
                     last_sell[symbol] = (filled_at, fill_price)
 
-            cid = getattr(o, "client_order_id", None)
-            if not cid:
+            oid = str(o.id) if getattr(o, "id", None) else None
+            raw_cid = getattr(o, "client_order_id", None)
+            # Effective key. Alpaca sets a client_order_id on every order,
+            # auto-generating one for orders we didn't submit (close_all legs,
+            # OTO stop-loss children, manual closes). Fall back to the order id
+            # so an order that somehow lacks a cid can still be keyed idempotently.
+            cid = str(raw_cid) if raw_cid else (f"ext-{oid}" if oid else None)
+            if cid is None:
                 continue
             row = s.scalar(
                 select(models.Order).where(models.Order.client_order_id == cid)
             )
             if row is None:
-                continue
-            new_status = str(getattr(o, "status", row.status))
-            if new_status != row.status and (
-                "reject" in new_status.lower()
-                or "cancel" in new_status.lower()
-                or "expired" in new_status.lower()
-            ):
-                # An order we thought was in flight died broker-side. Loud,
-                # not silent — this was the fully-silent swallow path.
-                log.warning(
-                    "order %s (%s %s) flipped to %s broker-side",
-                    cid, row.ticker, row.side, new_status,
+                # An order we never recorded: liquidate_all's close_all, a
+                # bracket/OTO stop-loss child leg, or a manual close. Backfill a
+                # minimal Order row so the fill can be attached and the ledger
+                # stays complete — this was a silent gap (the 8 legacy
+                # liquidation sells on 2026-07-07 produced only 1 fill row).
+                # Only filled orders need backfilling; an unfilled out-of-band
+                # order carries no fill.
+                if fill_price is None or not fill_qty:
+                    continue
+                row = models.Order(
+                    strategy_name="external",
+                    client_order_id=cid,
+                    alpaca_order_id=oid,
+                    ticker=symbol,
+                    side="sell" if side.endswith("sell") else "buy",
+                    order_type=(_enum_value(getattr(o, "order_type", None)) or "market")[:16],
+                    qty=fill_qty,
+                    status=str(getattr(o, "status", "filled")),
+                    submitted_at=filled_at,
                 )
-            row.alpaca_order_id = str(o.id) if getattr(o, "id", None) else row.alpaca_order_id
-            row.status = new_status
-            updated += 1
+                s.add(row)
+                s.flush()  # assign row.id for the Fill FK below
+                backfilled += 1
+            else:
+                new_status = str(getattr(o, "status", row.status))
+                if new_status != row.status and (
+                    "reject" in new_status.lower()
+                    or "cancel" in new_status.lower()
+                    or "expired" in new_status.lower()
+                ):
+                    # An order we thought was in flight died broker-side. Loud,
+                    # not silent — this was the fully-silent swallow path.
+                    log.warning(
+                        "order %s (%s %s) flipped to %s broker-side",
+                        cid, row.ticker, row.side, new_status,
+                    )
+                row.alpaca_order_id = oid or row.alpaca_order_id
+                row.status = new_status
+                updated += 1
 
             # Record the fill (idempotent on alpaca_fill_id).
             if fill_price is not None and fill_qty:
                 stmt = sqlite_insert(models.Fill).values(
                     order_id=row.id,
-                    alpaca_fill_id=str(o.id),
+                    alpaca_fill_id=(oid or cid),
                     qty=fill_qty,
                     price=fill_price,
                     filled_at=filled_at,
@@ -181,6 +225,7 @@ def reconcile_orders_and_positions(alpaca: AlpacaPaperClient | None = None) -> d
 
     return {
         "orders_updated": updated,
+        "orders_backfilled": backfilled,
         "positions_seen": len(positions),
         "fills_recorded": fills_recorded,
         "positions_closed": closed,

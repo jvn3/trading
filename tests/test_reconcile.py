@@ -171,6 +171,65 @@ def test_ticker_can_reopen_after_close_leaving_history() -> None:
         assert reopened.strategy_name == "insider_follow"
 
 
+def test_out_of_band_fill_backfills_order_and_records_fill() -> None:
+    create_all()
+    # No _db_order for this cid: a liquidate_all close_all sell (or an OTO
+    # stop-loss child leg) that never went through the executor. Before the
+    # fix these fills were silently dropped (`if row is None: continue`).
+    alpaca = _FakeAlpaca(
+        orders=[_order("alp-cid-x", symbol="AXP", side="OrderSide.SELL",
+                       fill_price=300.0, fill_qty=1.0, oid="alp-oob-1")],
+        positions=[],
+    )
+
+    r1 = reconcile_orders_and_positions(alpaca=alpaca)
+    r2 = reconcile_orders_and_positions(alpaca=alpaca)
+
+    assert r1["orders_backfilled"] == 1
+    assert r1["fills_recorded"] == 1
+    assert r2["orders_backfilled"] == 0  # Order now exists → no duplicate row
+    assert r2["fills_recorded"] == 0     # idempotent on alpaca_fill_id
+    with session_scope() as s:
+        orders = list(s.scalars(select(models.Order)))
+        assert len(orders) == 1
+        assert orders[0].strategy_name == "external"
+        assert orders[0].side == "sell"
+        assert orders[0].ticker == "AXP"
+        fills = list(s.scalars(select(models.Fill)))
+        assert len(fills) == 1
+        assert fills[0].order_id == orders[0].id
+        assert fills[0].qty == 1.0
+        assert fills[0].price == 300.0
+
+
+def test_mixed_batch_records_a_fill_per_filled_order() -> None:
+    create_all()
+    # The 2026-07-07 shape: one executor-submitted buy (has a DB order) plus
+    # three close_all sells that never touched the executor. Pre-fix this
+    # yielded 1 fill row for 4 fills; now every fill is recorded.
+    _db_order("cid-buy", "TQQQ", "buy")
+    orders = [
+        _order("cid-buy", symbol="TQQQ", side="buy",
+               fill_price=90.0, fill_qty=5.0, oid="alp-buy"),
+        _order("close-1", symbol="AXP", side="OrderSide.SELL",
+               fill_price=300.0, fill_qty=1.0, oid="alp-c1"),
+        _order("close-2", symbol="GE", side="OrderSide.SELL",
+               fill_price=170.0, fill_qty=2.0, oid="alp-c2"),
+        _order("close-3", symbol="HD", side="OrderSide.SELL",
+               fill_price=350.0, fill_qty=1.0, oid="alp-c3"),
+    ]
+    alpaca = _FakeAlpaca(
+        orders=orders, positions=[_live_position("TQQQ", 5.0, 90.0, 91.0)]
+    )
+
+    r = reconcile_orders_and_positions(alpaca=alpaca)
+
+    assert r["fills_recorded"] == 4
+    assert r["orders_backfilled"] == 3
+    with session_scope() as s:
+        assert len(list(s.scalars(select(models.Fill)))) == 4
+
+
 def test_close_without_sell_order_leaves_pnl_null() -> None:
     create_all()
     with session_scope() as s:

@@ -35,6 +35,11 @@ HEARTBEAT_MAX_AGE_MIN = 15
 REGIME_MAX_AGE_H = 24
 SIGNAL_MAX_AGE_DAYS = 7
 QQQ_MA_LEN = 200
+# A live↔DB position mismatch (or a transient equity reading) is expected while
+# orders are still settling. Treat a symbol as "in flight" if it has a working
+# order or one that filled within this window; reconcile hasn't mirrored those
+# fills into the DB yet, so the snapshot is mid-settlement, not a real fault.
+SETTLE_WINDOW_MIN = 20
 
 PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
 _RANK = {PASS: 0, WARN: 1, FAIL: 2}
@@ -42,6 +47,44 @@ _RANK = {PASS: 0, WARN: 1, FAIL: 2}
 
 def _naive_utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _float(v) -> float | None:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _in_flight_symbols(alpaca: AlpacaPaperClient) -> set[str]:
+    """Symbols whose account state is still settling — a working order, or one
+    filled within ``SETTLE_WINDOW_MIN``. A live↔DB mismatch or a transient
+    equity reading for these symbols is expected mid-settlement, not a fault.
+    Read-only and best-effort: any API hiccup returns what we have so far so a
+    fetch failure never turns a benign snapshot into a spurious WARN."""
+    syms: set[str] = set()
+    try:
+        for o in alpaca.get_orders(status="open"):
+            sym = str(getattr(o, "symbol", "")).upper()
+            if sym:
+                syms.add(sym)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=SETTLE_WINDOW_MIN)
+        for o in alpaca.get_orders(status="all", after=date.today().isoformat()):
+            fa = getattr(o, "filled_at", None)
+            if fa is None:
+                continue
+            if fa.tzinfo is None:
+                fa = fa.replace(tzinfo=timezone.utc)
+            if fa >= cutoff:
+                sym = str(getattr(o, "symbol", "")).upper()
+                if sym:
+                    syms.add(sym)
+    except Exception:  # noqa: BLE001
+        pass
+    return syms
 
 
 def _heartbeat_age_min() -> float | None:
@@ -94,7 +137,9 @@ def check_signal_expiry() -> tuple[str, str]:
     return PASS, f"{unacted} unacted signals, none stale"
 
 
-def check_positions_reconciled(alpaca: AlpacaPaperClient) -> tuple[str, str]:
+def check_positions_reconciled(
+    alpaca: AlpacaPaperClient, in_flight: set[str]
+) -> tuple[str, str]:
     live = {str(p.symbol).upper() for p in alpaca.get_positions()}
     with session_scope() as s:
         db_open = {
@@ -103,15 +148,24 @@ def check_positions_reconciled(alpaca: AlpacaPaperClient) -> tuple[str, str]:
             )
         }
     db_open = {t.upper() for t in db_open}
-    if live != db_open:
-        only_live = live - db_open
-        only_db = db_open - live
-        return WARN, (
-            f"live={len(live)} db_open={len(db_open)}; "
-            f"alpaca-only={sorted(only_live) or '—'} db-only={sorted(only_db) or '—'} "
-            "(may be a mid-reconcile snapshot)"
-        )
-    return PASS, f"{len(live)} open positions match Alpaca ↔ DB"
+    if live == db_open:
+        return PASS, f"{len(live)} open positions match Alpaca ↔ DB"
+    only_live = live - db_open
+    only_db = db_open - live
+    detail = (
+        f"live={len(live)} db_open={len(db_open)}; "
+        f"alpaca-only={sorted(only_live) or '—'} db-only={sorted(only_db) or '—'}"
+    )
+    # Tolerate mismatches fully explained by orders still settling — reconcile
+    # will mirror those fills into the DB on its next pass. Only WARN on drift
+    # that no in-flight order accounts for.
+    unexplained = (only_live | only_db) - in_flight
+    if not unexplained:
+        return PASS, detail + f"; explained by {len(in_flight)} order(s) in flight (mid-settlement)"
+    return WARN, detail + (
+        f"; {len(in_flight)} in flight, unexplained drift={sorted(unexplained)} "
+        "(reconcile lagging or real divergence)"
+    )
 
 
 def check_fills_ledger() -> tuple[str, str]:
@@ -176,16 +230,35 @@ def check_s1_state(alpaca: AlpacaPaperClient) -> tuple[str, str]:
     return (PASS if ok else WARN), detail
 
 
-def check_performance(alpaca: AlpacaPaperClient) -> tuple[str, str]:
+def check_performance(
+    alpaca: AlpacaPaperClient, in_flight: set[str]
+) -> tuple[str, str]:
     acct = alpaca.get_account()
     equity = float(acct.equity)
     ret = (equity / INCEPTION_EQUITY - 1) * 100
-    return PASS, f"equity ${equity:,.2f} ({ret:+.2f}% vs $10k inception); cash ${float(acct.cash):,.2f}"
+    base = (
+        f"equity ${equity:,.2f} ({ret:+.2f}% vs $10k inception); "
+        f"cash ${float(acct.cash):,.2f}"
+    )
+    # Equity comes straight from Alpaca's account endpoint, but a snapshot taken
+    # mid-settlement (orders still filling) can read a transient value that does
+    # not yet reflect open positions — this is what produced the misleading
+    # "equity -45%" on 2026-07-07. Flag it and anchor to the last settled close.
+    if in_flight:
+        last = _float(getattr(acct, "last_equity", None))
+        anchor = f"; last-close equity ${last:,.2f}" if last is not None else ""
+        return PASS, base + (
+            f"; {len(in_flight)} order(s) settling — equity may be transient{anchor}"
+        )
+    return PASS, base
 
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     alpaca = AlpacaPaperClient()
+    # Fetch the in-flight order set once and share it across the settlement-
+    # sensitive checks (positions, performance) so a mid-fill run doesn't WARN.
+    in_flight = _in_flight_symbols(alpaca)
 
     checks: list[tuple[str, str, str]] = []
 
@@ -199,11 +272,11 @@ def main() -> int:
     run("scheduler_alive", check_scheduler)
     run("regime_fresh", check_regime)
     run("signal_expiry", check_signal_expiry)
-    run("positions_reconciled", lambda: check_positions_reconciled(alpaca))
+    run("positions_reconciled", lambda: check_positions_reconciled(alpaca, in_flight))
     run("fills_ledger", check_fills_ledger)
     run("risk_events_24h", check_risk_events)
     run("s1_rotation_state", lambda: check_s1_state(alpaca))
-    run("performance", lambda: check_performance(alpaca))
+    run("performance", lambda: check_performance(alpaca, in_flight))
 
     verdict = max((_RANK[s] for _, s, _ in checks), default=0)
     verdict_str = {0: PASS, 1: WARN, 2: FAIL}[verdict]
