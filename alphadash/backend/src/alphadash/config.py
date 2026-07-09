@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # CORS origins allowed to call the API (the Vite dev server by default).
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Data providers: "stub" (deterministic fixtures) or "real" (jay_trading-backed, S1.1).
+    providers: str = "stub"
+
+    # FMP API key for the news adapter; None falls back to the engine's configured key.
+    fmp_api_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

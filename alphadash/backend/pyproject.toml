@@ -10,17 +10,21 @@ authors = [
 dependencies = [
     "fastapi>=0.136.0",
     "uvicorn[standard]>=0.44.0",
-    "pydantic>=2.13.2",
+    "pydantic[email]>=2.13.2",
     "pydantic-settings>=2.13.1",
     "python-dotenv>=1.2.2",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    "httpx>=0.28.1",
+    "tenacity>=9.1.4",
+    "jay-trading",
+    "argon2-cffi>=25.1.0",
+    "psycopg[binary]>=3.3.4",
 ]
 
-# Reuse of the personal engine's provider/risk/executor code is wired in at S1.1 via:
-#   [tool.uv.sources]
-#   jay-trading = { path = "../..", editable = true }
-# Intentionally omitted here so the S0.1 scaffold stays isolated and green.
+# S1.1: reuse the personal engine's data clients (FMP/FRED/Alpaca) as a path dependency.
+[tool.uv.sources]
+jay-trading = { path = "../..", editable = true }
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
@@ -53,6 +57,7 @@ ignore_missing_imports = true
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "hypothesis>=6.156.4",
     "mypy>=1.20.1",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",

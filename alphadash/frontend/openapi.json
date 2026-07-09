@@ -1,0 +1,1308 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "AlphaDash",
+  "description": "Beginner strategy-agent product \u2014 paper-trading first.",
+  "version": "0.0.1"
+ },
+ "paths": {
+  "/auth/register": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Register",
+    "operationId": "register_auth_register_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RegisterRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MeResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/login": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Login",
+    "operationId": "login_auth_login_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoginRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MeResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/auth/logout": {
+   "post": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Logout",
+    "operationId": "logout_auth_logout_post",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     }
+    }
+   }
+  },
+  "/auth/me": {
+   "get": {
+    "tags": [
+     "auth"
+    ],
+    "summary": "Me",
+    "operationId": "me_auth_me_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MeResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/account": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Account Info",
+    "operationId": "account_info_account_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccountOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/account/limits": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Account Limits",
+    "operationId": "account_limits_account_limits_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LimitsOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/account/pause": {
+   "post": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Pause Account",
+    "operationId": "pause_account_account_pause_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccountOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/account/resume": {
+   "post": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Resume Account",
+    "operationId": "resume_account_account_resume_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccountOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portfolio": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Portfolio",
+    "operationId": "portfolio_portfolio_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PortfolioOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portfolio/performance": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Performance",
+    "operationId": "performance_portfolio_performance_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 365,
+       "minimum": 7,
+       "default": 90,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PerformanceOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/quotes/{symbol}": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Quote",
+    "operationId": "quote_quotes__symbol__get",
+    "parameters": [
+     {
+      "name": "symbol",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Symbol"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuoteOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/orders": {
+   "post": {
+    "tags": [
+     "orders"
+    ],
+    "summary": "Create Order",
+    "operationId": "create_order_orders_post",
+    "parameters": [
+     {
+      "name": "Idempotency-Key",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "minLength": 8,
+       "maxLength": 128,
+       "title": "Idempotency-Key"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/OrderRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OrderResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "get": {
+    "tags": [
+     "orders"
+    ],
+    "summary": "List Orders",
+    "operationId": "list_orders_orders_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/OrderOut"
+         },
+         "title": "Response List Orders Orders Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/health": {
+   "get": {
+    "tags": [
+     "system"
+    ],
+    "summary": "Health",
+    "operationId": "health_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HealthResponse"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "AccountOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "mode": {
+      "type": "string",
+      "title": "Mode"
+     },
+     "base_currency": {
+      "type": "string",
+      "title": "Base Currency"
+     },
+     "starting_equity": {
+      "type": "string",
+      "title": "Starting Equity"
+     },
+     "paused": {
+      "type": "boolean",
+      "title": "Paused"
+     },
+     "trading_mode": {
+      "type": "string",
+      "title": "Trading Mode"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "mode",
+     "base_currency",
+     "starting_equity",
+     "paused",
+     "trading_mode"
+    ],
+    "title": "AccountOut"
+   },
+   "FillOut": {
+    "properties": {
+     "qty": {
+      "type": "string",
+      "title": "Qty"
+     },
+     "price": {
+      "type": "string",
+      "title": "Price"
+     },
+     "fee": {
+      "type": "string",
+      "title": "Fee"
+     },
+     "filled_at": {
+      "type": "string",
+      "title": "Filled At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "qty",
+     "price",
+     "fee",
+     "filled_at"
+    ],
+    "title": "FillOut"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "HealthResponse": {
+    "properties": {
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "version": {
+      "type": "string",
+      "title": "Version"
+     },
+     "trading_mode": {
+      "type": "string",
+      "title": "Trading Mode"
+     }
+    },
+    "type": "object",
+    "required": [
+     "status",
+     "version",
+     "trading_mode"
+    ],
+    "title": "HealthResponse",
+    "description": "Shape returned by ``GET /health`` (frozen contract for S0.1)."
+   },
+   "LimitsOut": {
+    "properties": {
+     "max_position_pct": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Position Pct"
+     },
+     "max_asset_class_pct": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Max Asset Class Pct"
+     },
+     "max_trades_per_week": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Trades Per Week"
+     },
+     "cash_floor_pct": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cash Floor Pct"
+     },
+     "per_suggestion_max_pct": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Per Suggestion Max Pct"
+     },
+     "drawdown_pause_pct": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Drawdown Pause Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "max_position_pct",
+     "max_asset_class_pct",
+     "max_trades_per_week",
+     "cash_floor_pct",
+     "per_suggestion_max_pct",
+     "drawdown_pause_pct"
+    ],
+    "title": "LimitsOut"
+   },
+   "LoginRequest": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "password": {
+      "type": "string",
+      "title": "Password"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "password"
+    ],
+    "title": "LoginRequest"
+   },
+   "MeResponse": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "email": {
+      "type": "string",
+      "title": "Email"
+     },
+     "display_name": {
+      "type": "string",
+      "title": "Display Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "email",
+     "display_name"
+    ],
+    "title": "MeResponse"
+   },
+   "OrderOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "asset_class": {
+      "type": "string",
+      "title": "Asset Class"
+     },
+     "side": {
+      "type": "string",
+      "title": "Side"
+     },
+     "order_type": {
+      "type": "string",
+      "title": "Order Type"
+     },
+     "qty": {
+      "type": "string",
+      "title": "Qty"
+     },
+     "limit_price": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Limit Price"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "rejected_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rejected Reason"
+     },
+     "created_at": {
+      "type": "string",
+      "title": "Created At"
+     },
+     "fill": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/FillOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "symbol",
+     "asset_class",
+     "side",
+     "order_type",
+     "qty",
+     "limit_price",
+     "status",
+     "rejected_reason",
+     "created_at"
+    ],
+    "title": "OrderOut"
+   },
+   "OrderRequest": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Symbol"
+     },
+     "asset_class": {
+      "type": "string",
+      "pattern": "^(equity|crypto)$",
+      "title": "Asset Class"
+     },
+     "side": {
+      "type": "string",
+      "pattern": "^(buy|sell)$",
+      "title": "Side"
+     },
+     "order_type": {
+      "type": "string",
+      "pattern": "^(market|limit)$",
+      "title": "Order Type"
+     },
+     "qty": {
+      "type": "string",
+      "title": "Qty"
+     },
+     "limit_price": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Limit Price"
+     }
+    },
+    "type": "object",
+    "required": [
+     "symbol",
+     "asset_class",
+     "side",
+     "order_type",
+     "qty"
+    ],
+    "title": "OrderRequest"
+   },
+   "OrderResult": {
+    "properties": {
+     "order": {
+      "$ref": "#/components/schemas/OrderOut"
+     },
+     "violations": {
+      "items": {
+       "$ref": "#/components/schemas/ViolationOut"
+      },
+      "type": "array",
+      "title": "Violations"
+     },
+     "replayed": {
+      "type": "boolean",
+      "title": "Replayed"
+     }
+    },
+    "type": "object",
+    "required": [
+     "order",
+     "violations",
+     "replayed"
+    ],
+    "title": "OrderResult"
+   },
+   "PerformanceOut": {
+    "properties": {
+     "points": {
+      "items": {
+       "$ref": "#/components/schemas/PerformancePointOut"
+      },
+      "type": "array",
+      "title": "Points"
+     },
+     "return_pct": {
+      "type": "number",
+      "title": "Return Pct"
+     },
+     "benchmark_return_pct": {
+      "type": "number",
+      "title": "Benchmark Return Pct"
+     },
+     "max_drawdown_pct": {
+      "type": "number",
+      "title": "Max Drawdown Pct"
+     },
+     "current_drawdown_pct": {
+      "type": "number",
+      "title": "Current Drawdown Pct"
+     },
+     "benchmark_symbol": {
+      "type": "string",
+      "title": "Benchmark Symbol"
+     }
+    },
+    "type": "object",
+    "required": [
+     "points",
+     "return_pct",
+     "benchmark_return_pct",
+     "max_drawdown_pct",
+     "current_drawdown_pct",
+     "benchmark_symbol"
+    ],
+    "title": "PerformanceOut"
+   },
+   "PerformancePointOut": {
+    "properties": {
+     "day": {
+      "type": "string",
+      "title": "Day"
+     },
+     "equity": {
+      "type": "string",
+      "title": "Equity"
+     },
+     "benchmark_equity": {
+      "type": "string",
+      "title": "Benchmark Equity"
+     }
+    },
+    "type": "object",
+    "required": [
+     "day",
+     "equity",
+     "benchmark_equity"
+    ],
+    "title": "PerformancePointOut"
+   },
+   "PortfolioOut": {
+    "properties": {
+     "equity": {
+      "type": "string",
+      "title": "Equity"
+     },
+     "cash": {
+      "type": "string",
+      "title": "Cash"
+     },
+     "positions": {
+      "items": {
+       "$ref": "#/components/schemas/PositionOut"
+      },
+      "type": "array",
+      "title": "Positions"
+     },
+     "allocation_pct": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "type": "object",
+      "title": "Allocation Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "equity",
+     "cash",
+     "positions",
+     "allocation_pct"
+    ],
+    "title": "PortfolioOut"
+   },
+   "PositionOut": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "asset_class": {
+      "type": "string",
+      "title": "Asset Class"
+     },
+     "quantity": {
+      "type": "string",
+      "title": "Quantity"
+     },
+     "avg_cost": {
+      "type": "string",
+      "title": "Avg Cost"
+     },
+     "market_value": {
+      "type": "string",
+      "title": "Market Value"
+     },
+     "unrealized_pl": {
+      "type": "string",
+      "title": "Unrealized Pl"
+     },
+     "allocation_pct": {
+      "type": "number",
+      "title": "Allocation Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "symbol",
+     "asset_class",
+     "quantity",
+     "avg_cost",
+     "market_value",
+     "unrealized_pl",
+     "allocation_pct"
+    ],
+    "title": "PositionOut"
+   },
+   "QuoteOut": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "price": {
+      "type": "string",
+      "title": "Price"
+     },
+     "as_of": {
+      "type": "string",
+      "title": "As Of"
+     },
+     "source": {
+      "type": "string",
+      "title": "Source"
+     },
+     "is_stale": {
+      "type": "boolean",
+      "title": "Is Stale"
+     }
+    },
+    "type": "object",
+    "required": [
+     "symbol",
+     "price",
+     "as_of",
+     "source",
+     "is_stale"
+    ],
+    "title": "QuoteOut"
+   },
+   "RegisterRequest": {
+    "properties": {
+     "email": {
+      "type": "string",
+      "format": "email",
+      "title": "Email"
+     },
+     "password": {
+      "type": "string",
+      "minLength": 10,
+      "title": "Password"
+     },
+     "display_name": {
+      "type": "string",
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Display Name"
+     }
+    },
+    "type": "object",
+    "required": [
+     "email",
+     "password",
+     "display_name"
+    ],
+    "title": "RegisterRequest"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   },
+   "ViolationOut": {
+    "properties": {
+     "limit_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Limit Type"
+     },
+     "message": {
+      "type": "string",
+      "title": "Message"
+     }
+    },
+    "type": "object",
+    "required": [
+     "limit_type",
+     "message"
+    ],
+    "title": "ViolationOut"
+   }
+  }
+ }
+}

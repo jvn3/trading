@@ -146,6 +146,19 @@ class User(PkMixin, CreatedAtMixin, Base):
 
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # S1.8: argon2 hash. Nullable so pre-auth rows (tests/fixtures) stay valid; login requires it.
+    password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class AuthSession(PkMixin, CreatedAtMixin, Base):
+    """Server-side login session (S1.8). Stores only the token's SHA-256 — never the token."""
+
+    __tablename__ = "auth_sessions"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RiskProfile(PkMixin, CreatedAtMixin, UpdatedAtMixin, Base):

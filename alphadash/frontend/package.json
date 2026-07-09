@@ -9,12 +9,14 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "gen:api": "uv --directory ../backend run python -m alphadash.openapi_export ../frontend/openapi.json && openapi-typescript openapi.json -o src/lib/api-types.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.1",
     "zustand": "^5.0.2"
   },
   "devDependencies": {
@@ -31,6 +33,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.15.0",
     "jsdom": "^25.0.1",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
     "vitest": "^2.1.8",

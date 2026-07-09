@@ -31,7 +31,7 @@ Companion to the blueprint: [docs/product/beginner_agent_product_blueprint.md](.
 | Phase | Theme | Sessions | Done |
 |---|---|---|---|
 | 0 | Foundations | S0.1–S0.4 | 4 / 4 |
-| 1 | Safety & data spine (no AI) | S1.1–S1.12 | 0 / 12 |
+| 1 | Safety & data spine (no AI) | S1.1–S1.12 | 12 / 12 |
 | 2 | The agent | S2.1–S2.9 | 0 / 9 |
 | 3 | Beginner experience | S3.1–S3.7 | 0 / 7 |
 | 4 | Trust-earning extensions | S4.x | not scoped |
@@ -263,78 +263,134 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
 > Contracts for S1.x are **freeze before start** — lock the interface with the operator when the
 > session comes up (most derive directly from S0.2 schema + S0.3 providers).
 
-## `[ ]` S1.1 — Real provider implementations (wire in `jay_trading`)
+## `[x]` S1.1 — Real provider implementations (wire in `jay_trading`)
 - **Depends on:** S0.3
 - **Deliverable:** implement S0.3 protocols against `jay_trading` (`data/alpaca_client`, `fmp`, `fred`,
   `edgar`); add `[tool.uv.sources] jay-trading = { path = "../.." }` + dependency; caching + backoff.
-- **Acceptance:** [ ] live quote/bar/news/fundamental normalized to S0.3 DTOs · [ ] freshness stamped
-  · [ ] integration tests marked `integration` · [ ] unit tests use stub, green.
-- **Landed:** —
+- **Acceptance:** [x] live quote/bar/news/fundamental normalized to S0.3 DTOs · [x] freshness stamped
+  · [x] integration tests marked `integration` · [x] unit tests use stub, green.
+- **Landed:** 2026-07-08 · in-session · `providers/{real,cache,factory}.py`; live FMP+FRED integration verified.
+- **Notes:** Market data + fundamentals via engine `FMPClient` (duck-typed, engine untouched); macro via
+  `FREDClient`; news via own httpx adapter (engine has no news endpoint) with tenacity backoff + TTL cache.
+  Providers select via `ALPHADASH_PROVIDERS=stub|real`. FMP key: `ALPHADASH_FMP_API_KEY`, dev fallback reads
+  root `.env` (engine Settings is cwd-bound + demands Alpaca keys — unusable from alphadash process).
+  Bars are FMP EOD `1D` only; intraday timeframes raise `ProviderError` (Alpaca bars can arrive later).
+  Integration tests gated by `ALPHADASH_RUN_INTEGRATION=1`.
 
-## `[ ]` S1.2 — Fundamentals + news ingestion + normalization
+## `[x]` S1.2 — Fundamentals + news ingestion + normalization
 - **Depends on:** S1.1, S0.2
-- **Acceptance:** [ ] cited, timestamped data persisted to `data_snapshots` shape · [ ] tests.
-- **Landed:** —
+- **Acceptance:** [x] cited, timestamped data persisted to `data_snapshots` shape · [x] tests.
+- **Landed:** 2026-07-09 · in-session · `services/ingestion.py::snapshot_market_context`, live-verified.
+- **Notes:** One `data_snapshots` row per call: quotes/news/fundamentals/macro with provenance,
+  Decimals as strings. Failing feed degrades (recorded in `payload.errors`), never kills snapshot.
 
-## `[ ]` S1.3 — Risk & guardrail service (deterministic, hard veto)
+## `[x]` S1.3 — Risk & guardrail service (deterministic, hard veto)
 - **Depends on:** S0.2
 - **Deliverable:** pure `validate_order(order, account_state, limits) -> Decision(allow|reject+reason)`.
-- **Acceptance:** [ ] every `risk_limits.limit_type` enforced · [ ] breach → reason, allow paths · [ ]
-  property/unit tests cover boundaries · [ ] **no LLM, no network**.
-- **Landed:** —
+- **Acceptance:** [x] every `risk_limits.limit_type` enforced · [x] breach → reason, allow paths · [x]
+  property/unit tests cover boundaries · [x] **no LLM, no network**.
+- **Landed:** 2026-07-09 · in-session · `domain/risk.py`, 16 tests (incl. hypothesis properties).
+- **Notes:** Frozen semantics: buy-side caps use ≤ (boundary allowed); drawdown pause + paused flag
+  block buys only (sells/de-risking never trapped); trades/week counts both sides; structural
+  invariants always on (qty>0, price>0, no shorting, no buying past cash). Decision returns ALL
+  violations (educational veto). `RiskLimitSet.max_asset_class_pct` is per-class map from the
+  risk_profiles JSON.
 
-## `[ ]` S1.4 — Sizing engine (deterministic)
+## `[x]` S1.4 — Sizing engine (deterministic)
 - **Depends on:** S0.2
-- **Acceptance:** [ ] given profile + price + account, returns exact size · [ ] never exceeds
-  per-suggestion/position caps · [ ] property tests · [ ] LLM-free.
-- **Landed:** —
+- **Acceptance:** [x] given profile + price + account, returns exact size · [x] never exceeds
+  per-suggestion/position caps · [x] property tests · [x] LLM-free.
+- **Landed:** 2026-07-09 · in-session · `domain/sizing.py`, 9 tests.
+- **Notes:** `size_buy` takes min over cap-derived notional ceilings, floors qty at 8dp, names the
+  `binding_constraint` (teaching). Central property (300 hypothesis examples): a sized buy ALWAYS
+  passes `validate_order` with the same state+limits. `size_sell` caps at held qty.
 
 ## `[ ]` S1.5 — Paper execution engine (fills, idempotency)
 - **Depends on:** S1.3, S1.4
-- **Acceptance:** [ ] order → validated → simulated fill w/ modeled slippage · [ ] idempotency_key
-  dedupes · [ ] rejects on risk veto · [ ] tests.
-- **Landed:** —
+- **Acceptance:** [x] order → validated → simulated fill w/ modeled slippage · [x] idempotency_key
+  dedupes · [x] rejects on risk veto · [x] tests.
+- **Landed:** 2026-07-09 · in-session · `services/execution.py::place_order`, 8 tests.
+- **Notes:** Frozen: 5 bps adverse slippage on market orders; limit orders marketable-or-reject
+  (fill clamped to limit, never violates it; no resting book in Phase 1). Fees 0 in paper. Veto →
+  `rejected` + `risk_events(veto)` + journal. Idempotent replay returns original outcome untouched.
+  `build_account_state` assembles the risk view from DB + injected prices (trades/week from fills).
 
 ## `[ ]` S1.6 — Reconciliation + append-only journal
 - **Depends on:** S1.5
-- **Acceptance:** [ ] every lifecycle event journaled · [ ] discrepancy raises `risk_events` · [ ]
-  journal is append-only (no update/delete path) · [ ] tests.
-- **Landed:** —
+- **Acceptance:** [x] every lifecycle event journaled · [x] discrepancy raises `risk_events` · [x]
+  journal is append-only (no update/delete path) · [x] tests.
+- **Landed:** 2026-07-09 · in-session · `services/{journal,reconciliation}.py`, 6 tests.
+- **Notes:** Append-only enforced at ORM level: `before_flush` guard raises `JournalTamperError` on
+  any UPDATE/DELETE of journal rows. Reconciliation replays fills from `starting_equity` and compares
+  to stored positions/cash; position/cash/phantom-position tampering all detected → risk_event + journal.
+  Never silently repairs.
 
 ## `[ ]` S1.7 — Portfolio & accounting (perf vs benchmark, drawdown)
 - **Depends on:** S1.5
-- **Acceptance:** [ ] holdings/cash/allocation correct vs hand-computed fixtures · [ ] performance
-  reported **with benchmark + drawdown** · [ ] tests.
-- **Landed:** —
+- **Acceptance:** [x] holdings/cash/allocation correct vs hand-computed fixtures · [x] performance
+  reported **with benchmark + drawdown** · [x] tests.
+- **Landed:** 2026-07-09 · in-session · `services/portfolio.py`, 5 tests vs hand-computed fixtures.
+- **Notes:** Benchmark frozen: SPY (starting equity hypothetically invested at first close).
+  Equity curve replayed daily from fills, priced by EOD closes with ≤7-day carry-forward
+  (weekends/holidays); missing-bar days emit carried values, never interpolated lies. Reports
+  return %, benchmark return %, max + current drawdown %.
 
-## `[ ]` S1.8 — Auth, accounts, tenant isolation (RLS)
+## `[x]` S1.8 — Auth, accounts, tenant isolation (RLS)
 - **Depends on:** S0.2
-- **Acceptance:** [ ] auth + session · [ ] cross-tenant read blocked by test · [ ] paper account
+- **Acceptance:** [x] auth + session · [x] cross-tenant read blocked by test · [x] paper account
   provisioning.
-- **Landed:** —
+- **Landed:** 2026-07-09 · in-session · argon2id + DB sessions + Postgres RLS; 7 sqlite tests + 3 live-Postgres RLS tests.
+- **Notes:** Operator-frozen: email+password (argon2id), server-side sessions (SHA-256 of token in
+  new `auth_sessions` table; migration 0002 also adds `users.password_hash` — schema extension beyond
+  the S0.2 sixteen). Postgres via `alphadash/docker-compose.yml` (:5433). Migration 0003 = physical
+  RLS: ENABLE+FORCE + `tenant_isolation` policy on all 15 tenant tables keyed on
+  `current_setting('app.user_id', true)`; child tables (fills/decisions/watchlist_items/data_snapshots)
+  inherit via RLS-in-subquery. **App must connect as non-superuser `alphadash_app`** (RLS never binds
+  superusers — bit us; role created by `docker/initdb/01-app-role.sql`); migrations run as owner.
+  `set_config(..., is_local=true)` per transaction (pool-safe). users/auth_sessions stay outside RLS
+  (auth bootstrap). Registration pins tenant context before provisioning (WITH CHECK). Live-verified:
+  cross-tenant read empty, no-context zero rows, forged cross-tenant INSERT rejected.
 
-## `[ ]` S1.9 — BFF + typed API contract (OpenAPI)
+## `[x]` S1.9 — BFF + typed API contract (OpenAPI)
 - **Depends on:** S1.7, S1.8
-- **Acceptance:** [ ] endpoints return shaped responses · [ ] client types generated from OpenAPI ·
-  [ ] contract test.
-- **Landed:** —
+- **Acceptance:** [x] endpoints return shaped responses · [x] client types generated from OpenAPI ·
+  [x] contract test.
+- **Landed:** 2026-07-09 · in-session · `api/{schemas,portfolio,orders,deps}.py`, 8 BFF tests.
+- **Notes:** Endpoints: /auth/*, /account (+/limits,/pause,/resume), /portfolio, /portfolio/performance,
+  /orders (POST needs `Idempotency-Key` header), /quotes/{symbol}. Money = string on the wire
+  (contract-tested against openapi.json). Types: `npm run gen:api` → `frontend/src/lib/api-types.ts`
+  via openapi-typescript; spec exporter `python -m alphadash.openapi_export`. Kill switch modeled as
+  `risk_events(auto_pause)` with detail.action pause/resume (schema has no paused column — audit
+  trail is better anyway). Every tenant endpoint goes through `get_tenant_db` (RLS context).
+  Cosmetic: Numeric(24,8) limits render trailing zeros in veto copy — normalize in S3.7 pass.
 
-## `[ ]` S1.10 — Frontend app shell (nav, routing, safety indicator)
+## `[x]` S1.10 — Frontend app shell (nav, routing, safety indicator)
 - **Depends on:** S0.4
-- **Acceptance:** [ ] bottom nav Home/Agent/Portfolio/Learn · [ ] global paper badge + reachable kill
-  switch · [ ] Query + WS adapter wired.
-- **Landed:** —
+- **Acceptance:** [x] bottom nav Home/Agent/Portfolio/Learn · [x] global paper badge + reachable kill
+  switch · [x] Query + WS adapter wired.
+- **Landed:** 2026-07-09 · in-session · `app/Shell.tsx`, `App.tsx` auth gate + routes, AuthScreen; 3 shell tests.
+- **Notes:** react-router v7. Auth gate on /auth/me (401 → sign-in/register screen). Kill switch =
+  two-tap confirm in the sticky header, calls /account/pause|resume, shows Paused chip. WS adapter
+  (`lib/ws.ts`) has reconnect/backoff + subscribe surface but stays dormant until S2.7 ships a socket.
 
-## `[ ]` S1.11 — Portfolio screen
+## `[x]` S1.11 — Portfolio screen
 - **Depends on:** S1.9, S1.10
-- **Acceptance:** [ ] renders holdings/allocation/perf from BFF · [ ] benchmark + drawdown shown.
-- **Landed:** —
+- **Acceptance:** [x] renders holdings/allocation/perf from BFF · [x] benchmark + drawdown shown.
+- **Landed:** 2026-07-09 · in-session · `features/portfolio/PortfolioScreen.tsx`; screen test.
+- **Notes:** Stat tiles: equity, cash, 90d return **with SPY same-period sub-line**, max + current
+  drawdown. Holdings table with unrealized P/L, allocation incl. cash bucket, teaching empty state,
+  paper/not-advice microcopy. Chart deferred (numbers first; dataviz pass can come with S3.x).
 
-## `[ ]` S1.12 — Manual paper order ticket + approve→execute
+## `[x]` S1.12 — Manual paper order ticket + approve→execute
 - **Depends on:** S1.9, S1.11
-- **Acceptance:** [ ] places a limit-checked paper trade end-to-end · [ ] confirmation scales with
+- **Acceptance:** [x] places a limit-checked paper trade end-to-end · [x] confirmation scales with
   consequence. **← Phase 1 exit gate.**
-- **Landed:** —
+- **Landed:** 2026-07-09 · in-session · `features/orders/OrderTicket.tsx`; 2 ticket tests + live e2e.
+- **Notes:** Quote preview with provenance SourceChip + est. cost; two-tap confirm; client-minted
+  UUID Idempotency-Key (new key per intent, replay-safe); fill panel notes modeled slippage; veto
+  renders as "your safety rules stepped in" with every violation listed. **Exit gate verified live**
+  against Postgres+RLS (uvicorn, curl): register → limit buy filled at 210.61 (clamped < 211 limit)
+  → veto with reasons → portfolio math exact → performance w/ SPY → unauthenticated blocked.
 
 ---
 

@@ -1,0 +1,24 @@
+# Dev/prod-parity Postgres for AlphaDash (S1.8). Unit tests stay on sqlite; anything touching
+# auth/RLS runs against this.
+#   docker compose -f alphadash/docker-compose.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alphadash-postgres
+    environment:
+      POSTGRES_USER: alphadash
+      POSTGRES_PASSWORD: alphadash_dev # dev only — override via env in any shared deployment
+      POSTGRES_DB: alphadash
+    ports:
+      - "5433:5432"
+    volumes:
+      - alphadash_pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alphadash"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  alphadash_pgdata:

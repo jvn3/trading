@@ -14,6 +14,7 @@ from alphadash.db import models
 from alphadash.db.base import Base, new_id
 
 EXPECTED_TABLES = {
+    "auth_sessions",  # S1.8 schema extension
     "users",
     "risk_profiles",
     "accounts",

@@ -21,6 +21,8 @@ export default [
     rules: {
       ...tseslint.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // TS already errors on genuinely-undefined names; no-undef false-positives on DOM types.
+      "no-undef": "off",
     },
   },
 ];
