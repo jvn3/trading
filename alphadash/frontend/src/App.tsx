@@ -32,7 +32,9 @@ export function AuthedApp() {
   const logout = async () => {
     await api.logout();
     queryClient.clear();
-    queryClient.invalidateQueries({ queryKey: ["me"] });
+    // Full reload: guarantees zero client state (query cache, zustand, in-flight streams)
+    // survives a sign-out — the reloaded app sees 401 and lands on the sign-in screen.
+    window.location.assign("/");
   };
 
   return (

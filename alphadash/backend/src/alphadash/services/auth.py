@@ -24,11 +24,14 @@ from sqlalchemy.orm import Session
 
 from alphadash.db.models import (
     Account,
+    AssetClass,
     AuthSession,
     CashBalance,
     RiskProfile,
     RiskProfileName,
     User,
+    Watchlist,
+    WatchlistItem,
 )
 from alphadash.db.session import set_tenant_context
 
@@ -91,6 +94,19 @@ def register_user(
     session.flush()
     session.add(
         CashBalance(account_id=account.id, currency=account.base_currency, amount=starting_equity)
+    )
+    # Starter watchlist so the agent (S2.x) has candidates to consider from day one.
+    watchlist = Watchlist(user_id=user.id, name="Starter")
+    session.add(watchlist)
+    session.flush()
+    session.add_all(
+        [
+            WatchlistItem(watchlist_id=watchlist.id, symbol="AAPL", asset_class=AssetClass.equity),
+            WatchlistItem(watchlist_id=watchlist.id, symbol="MSFT", asset_class=AssetClass.equity),
+            WatchlistItem(
+                watchlist_id=watchlist.id, symbol="BTCUSD", asset_class=AssetClass.crypto
+            ),
+        ]
     )
     session.flush()
     return RegisteredUser(user=user, account=account, profile=profile)

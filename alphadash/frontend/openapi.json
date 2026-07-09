@@ -636,6 +636,423 @@
     }
    }
   },
+  "/agent/run": {
+   "post": {
+    "tags": [
+     "suggestions"
+    ],
+    "summary": "Trigger Agent Run",
+    "operationId": "trigger_agent_run_agent_run_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AgentRunOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/suggestions": {
+   "get": {
+    "tags": [
+     "suggestions"
+    ],
+    "summary": "List Suggestions",
+    "operationId": "list_suggestions_suggestions_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SuggestionListOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/suggestions/{suggestion_id}/approve": {
+   "post": {
+    "tags": [
+     "suggestions"
+    ],
+    "summary": "Approve",
+    "operationId": "approve_suggestions__suggestion_id__approve_post",
+    "parameters": [
+     {
+      "name": "suggestion_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Suggestion Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DecisionRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DecisionResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/suggestions/{suggestion_id}/modify": {
+   "post": {
+    "tags": [
+     "suggestions"
+    ],
+    "summary": "Modify",
+    "operationId": "modify_suggestions__suggestion_id__modify_post",
+    "parameters": [
+     {
+      "name": "suggestion_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Suggestion Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DecisionRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DecisionResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/suggestions/{suggestion_id}/dismiss": {
+   "post": {
+    "tags": [
+     "suggestions"
+    ],
+    "summary": "Dismiss",
+    "operationId": "dismiss_suggestions__suggestion_id__dismiss_post",
+    "parameters": [
+     {
+      "name": "suggestion_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Suggestion Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DecisionRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DecisionResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/suggestions/{suggestion_id}/trace": {
+   "get": {
+    "tags": [
+     "suggestions"
+    ],
+    "summary": "Trace",
+    "operationId": "trace_suggestions__suggestion_id__trace_get",
+    "parameters": [
+     {
+      "name": "suggestion_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Suggestion Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TraceOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/chat": {
+   "post": {
+    "tags": [
+     "chat"
+    ],
+    "summary": "Chat",
+    "operationId": "chat_chat_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ChatRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/health": {
    "get": {
     "tags": [
@@ -697,6 +1114,137 @@
      "trading_mode"
     ],
     "title": "AccountOut"
+   },
+   "AgentRunOut": {
+    "properties": {
+     "run_id": {
+      "type": "string",
+      "title": "Run Id"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "suggestions": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Suggestions"
+     }
+    },
+    "type": "object",
+    "required": [
+     "run_id",
+     "status",
+     "suggestions"
+    ],
+    "title": "AgentRunOut"
+   },
+   "ChatMessage": {
+    "properties": {
+     "role": {
+      "type": "string",
+      "pattern": "^(user|assistant)$",
+      "title": "Role"
+     },
+     "content": {
+      "type": "string",
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Content"
+     }
+    },
+    "type": "object",
+    "required": [
+     "role",
+     "content"
+    ],
+    "title": "ChatMessage"
+   },
+   "ChatRequest": {
+    "properties": {
+     "message": {
+      "type": "string",
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Message"
+     },
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/ChatMessage"
+      },
+      "type": "array",
+      "title": "History"
+     }
+    },
+    "type": "object",
+    "required": [
+     "message"
+    ],
+    "title": "ChatRequest"
+   },
+   "DecisionRequest": {
+    "properties": {
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "qty": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Qty"
+     }
+    },
+    "type": "object",
+    "title": "DecisionRequest"
+   },
+   "DecisionResult": {
+    "properties": {
+     "suggestion": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Suggestion"
+     },
+     "order": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/OrderOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "violations": {
+      "items": {
+       "$ref": "#/components/schemas/ViolationOut"
+      },
+      "type": "array",
+      "title": "Violations",
+      "default": []
+     }
+    },
+    "type": "object",
+    "required": [
+     "suggestion"
+    ],
+    "title": "DecisionResult"
    },
    "FillOut": {
     "properties": {
@@ -1237,6 +1785,121 @@
      "display_name"
     ],
     "title": "RegisterRequest"
+   },
+   "SuggestionListOut": {
+    "properties": {
+     "suggestions": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Suggestions"
+     }
+    },
+    "type": "object",
+    "required": [
+     "suggestions"
+    ],
+    "title": "SuggestionListOut"
+   },
+   "TraceOut": {
+    "properties": {
+     "suggestion_id": {
+      "type": "string",
+      "title": "Suggestion Id"
+     },
+     "candidate_ref": {
+      "type": "string",
+      "title": "Candidate Ref"
+     },
+     "signal_features": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Signal Features"
+     },
+     "evidence": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Evidence"
+     },
+     "sizing": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Sizing"
+     },
+     "prompt_version": {
+      "type": "string",
+      "title": "Prompt Version"
+     },
+     "model_version": {
+      "type": "string",
+      "title": "Model Version"
+     },
+     "agent_run_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Agent Run Id"
+     },
+     "snapshot_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Snapshot Id"
+     },
+     "snapshot_as_of": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Snapshot As Of"
+     },
+     "risk_events": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "title": "Risk Events"
+     }
+    },
+    "type": "object",
+    "required": [
+     "suggestion_id",
+     "candidate_ref",
+     "signal_features",
+     "evidence",
+     "sizing",
+     "prompt_version",
+     "model_version",
+     "agent_run_id",
+     "snapshot_id",
+     "snapshot_as_of",
+     "risk_events"
+    ],
+    "title": "TraceOut",
+    "description": "S2.6 \u2014 the full 'show your work' trail: candidate logic \u2192 source data \u2192 model metadata."
    },
    "ValidationError": {
     "properties": {

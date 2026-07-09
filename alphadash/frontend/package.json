@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:api": "uv --directory ../backend run python -m alphadash.openapi_export ../frontend/openapi.json && openapi-typescript openapi.json -o src/lib/api-types.ts"
+    "gen:api": "uv --directory ../backend run python -m alphadash.openapi_export ../frontend/openapi.json && openapi-typescript openapi.json -o src/lib/api-types.ts",
+    "test:e2e": "LD_LIBRARY_PATH=$HOME/.local/pwlibs:$LD_LIBRARY_PATH playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.1",

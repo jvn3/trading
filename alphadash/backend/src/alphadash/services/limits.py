@@ -7,6 +7,7 @@ is modeled with ``risk_events`` of type ``auto_pause`` carrying ``detail.action`
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -44,22 +45,28 @@ def effective_limits(session: Session, user_id: str) -> RiskLimitSet:
 
 
 def is_paused(session: Session, account: Account) -> bool:
-    latest = session.scalar(
-        select(RiskEvent)
-        .where(
+    events = session.scalars(
+        select(RiskEvent).where(
             RiskEvent.account_id == account.id,
             RiskEvent.event_type == RiskEventType.auto_pause,
         )
-        .order_by(RiskEvent.created_at.desc(), RiskEvent.id.desc())
-    )
-    return bool(latest and latest.detail.get("action") == "pause")
+    ).all()
+    if not events:
+        return False
+    # Order by the microsecond timestamp stamped into detail — created_at is second-precision
+    # on sqlite, so rapid pause→resume pairs would otherwise tie and sort arbitrarily.
+    latest = max(events, key=lambda e: e.detail.get("at") or e.created_at.isoformat())
+    return latest.detail.get("action") == "pause"
 
 
-def set_paused(session: Session, account: Account, *, paused: bool, by: str) -> RiskEvent:
+def set_paused(
+    session: Session, account: Account, *, paused: bool, by: str, now: datetime | None = None
+) -> RiskEvent:
+    stamp = (now or datetime.now(UTC)).isoformat()
     event = RiskEvent(
         account_id=account.id,
         event_type=RiskEventType.auto_pause,
-        detail={"action": "pause" if paused else "resume", "by": by},
+        detail={"action": "pause" if paused else "resume", "by": by, "at": stamp},
     )
     session.add(event)
     session.flush()

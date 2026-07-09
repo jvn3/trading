@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Persistence — defaults to the sqlite db already present under backend/.
     database_url: str = "sqlite:///./alphadash.db"
 
+    # Dev/e2e only: create tables from metadata at startup (production uses Alembic migrations).
+    create_all: bool = False
+
     # CORS origins allowed to call the API (the Vite dev server by default).
     cors_origins: list[str] = ["http://localhost:5173"]
 
@@ -40,6 +43,16 @@ class Settings(BaseSettings):
 
     # FMP API key for the news adapter; None falls back to the engine's configured key.
     fmp_api_key: str | None = None
+
+    # --- LLM (S2.3). Provider-switchable: fake | anthropic | openai | github ---
+    llm_provider: str = "fake"
+    anthropic_api_key: str | None = None  # also honors bare ANTHROPIC_API_KEY env
+    anthropic_model: str = "claude-opus-4-8"
+    openai_api_key: str | None = None  # also honors bare OPENAI_API_KEY env
+    openai_model: str = "gpt-4o"
+    github_token: str | None = None  # also honors bare GITHUB_TOKEN env (models:read PAT)
+    github_model: str = "openai/gpt-4o"
+    github_base_url: str = "https://models.github.ai/inference"
 
 
 @lru_cache

@@ -6,10 +6,10 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    port: Number(process.env.ALPHADASH_WEB_PORT ?? 5173),
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: process.env.ALPHADASH_API_TARGET ?? "http://localhost:8000",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
@@ -19,5 +19,6 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/setupTests.ts",
+    exclude: ["node_modules/**", "e2e/**"], // e2e/ belongs to Playwright, not vitest
   },
 });

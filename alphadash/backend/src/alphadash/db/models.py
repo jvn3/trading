@@ -408,6 +408,26 @@ class AgentRun(PkMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class EvidenceDoc(PkMixin, CreatedAtMixin, Base):
+    """Retrievable evidence corpus (S2.2 schema extension) — news items, fundamental summaries.
+
+    Text is UNTRUSTED third-party content: it is retrieved, sandboxed, and cited — never executed
+    as instructions. Postgres adds a generated tsvector + GIN index (migration 0004); on sqlite
+    retrieval falls back to LIKE scoring.
+    """
+
+    __tablename__ = "evidence_docs"
+
+    external_id: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
+    doc_type: Mapped[str] = mapped_column(String(24), nullable=False)  # news|fundamentals|macro
+    source: Mapped[str] = mapped_column(String(120), nullable=False)
+    symbols: Mapped[list[Any]] = mapped_column(JSON, nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class DataSnapshot(PkMixin, CreatedAtMixin, Base):
     """Point-in-time agent inputs — the no-lookahead guarantee hangs off this table."""
 

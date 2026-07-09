@@ -20,6 +20,8 @@ dependencies = [
     "jay-trading",
     "argon2-cffi>=25.1.0",
     "psycopg[binary]>=3.3.4",
+    "anthropic>=0.116.0",
+    "openai>=2.44.0",
 ]
 
 # S1.1: reuse the personal engine's data clients (FMP/FRED/Alpaca) as a path dependency.

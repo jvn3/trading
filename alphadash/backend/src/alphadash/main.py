@@ -13,10 +13,13 @@ from pydantic import BaseModel
 
 from alphadash import __version__
 from alphadash.api.auth import router as auth_router
+from alphadash.api.chat import router as chat_router
 from alphadash.api.orders import router as orders_router
 from alphadash.api.portfolio import router as portfolio_router
+from alphadash.api.suggestions import router as suggestions_router
 from alphadash.config import Settings, get_settings
 from alphadash.db.session import build_engine, build_session_factory
+from alphadash.llm.factory import build_llm
 from alphadash.providers.factory import build_bundle
 
 
@@ -38,9 +41,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     engine = build_engine(settings)
+    if settings.create_all:  # dev/e2e convenience; production schema comes from Alembic
+        from alphadash.db.base import Base
+
+        Base.metadata.create_all(engine)
     app.state.engine = engine
     app.state.session_factory = build_session_factory(engine)
     app.state.providers = build_bundle(settings)
+    app.state.llm = build_llm(settings)
 
     app.add_middleware(
         CORSMiddleware,
@@ -52,6 +60,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(portfolio_router)
     app.include_router(orders_router)
+    app.include_router(suggestions_router)
+    app.include_router(chat_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:

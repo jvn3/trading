@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from alphadash.db.models import DataSnapshot
 from alphadash.providers.factory import ProviderBundle
+from alphadash.services import retrieval
 
 log = logging.getLogger(__name__)
 
@@ -56,13 +57,17 @@ def snapshot_market_context(
             log.warning("quote ingestion failed for %s: %s", symbol, e)
             payload["errors"].append({"feed": "quote", "symbol": symbol, "error": str(e)})
         try:
-            payload["fundamentals"].append(_json(bundle.fundamentals.get_fundamentals(symbol)))
+            snapshot_fund = bundle.fundamentals.get_fundamentals(symbol)
+            payload["fundamentals"].append(_json(snapshot_fund))
+            retrieval.index_fundamentals(session, snapshot_fund)  # S2.2 evidence corpus
         except Exception as e:
             log.warning("fundamentals ingestion failed for %s: %s", symbol, e)
             payload["errors"].append({"feed": "fundamentals", "symbol": symbol, "error": str(e)})
 
     try:
-        payload["news"] = [_json(n) for n in bundle.news.get_news(symbols, since=news_since)]
+        news_items = bundle.news.get_news(symbols, since=news_since)
+        payload["news"] = [_json(n) for n in news_items]
+        retrieval.index_news(session, news_items)  # S2.2 evidence corpus
     except Exception as e:
         log.warning("news ingestion failed: %s", e)
         payload["errors"].append({"feed": "news", "symbol": None, "error": str(e)})

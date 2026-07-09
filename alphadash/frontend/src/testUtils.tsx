@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 
-type Handler = (init?: RequestInit) => { status?: number; body: unknown };
+type Handler = (init?: RequestInit) => { status?: number; body?: unknown; sse?: unknown[] };
 export type Routes = Record<string, Handler>;
 
 export function mockApi(routes: Routes) {
@@ -20,7 +20,14 @@ export function mockApi(routes: Routes) {
     if (!handler) {
       return new Response(JSON.stringify({ detail: `no mock for ${key}` }), { status: 404 });
     }
-    const { status = 200, body } = handler(init);
+    const { status = 200, body, sse } = handler(init);
+    if (sse) {
+      const text = sse.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+      return new Response(text, {
+        status,
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }
     return new Response(JSON.stringify(body), {
       status,
       headers: { "Content-Type": "application/json" },

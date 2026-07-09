@@ -130,7 +130,7 @@ class StubProviders:
                 )
             )
             ts += step
-            offset += Decimal("0.25")
+            offset += base * Decimal("0.005")  # ~0.5%/day drift → momentum rules can fire in dev
         return bars
 
     # NewsProvider ----------------------------------------------------------

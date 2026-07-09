@@ -32,7 +32,7 @@ Companion to the blueprint: [docs/product/beginner_agent_product_blueprint.md](.
 |---|---|---|---|
 | 0 | Foundations | S0.1–S0.4 | 4 / 4 |
 | 1 | Safety & data spine (no AI) | S1.1–S1.12 | 12 / 12 |
-| 2 | The agent | S2.1–S2.9 | 0 / 9 |
+| 2 | The agent | S2.1–S2.9 | 9 / 9 |
 | 3 | Beginner experience | S3.1–S3.7 | 0 / 7 |
 | 4 | Trust-earning extensions | S4.x | not scoped |
 | 5 | Real-money mode (gated) | S5.x | not scoped |
@@ -398,56 +398,89 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
 
 > Load the `claude-api` skill for current model IDs/params before any LLM-touching session.
 
-## `[ ]` S2.1 — Signal/candidate engine (deterministic idea generation)
+## `[x]` S2.1 — Signal/candidate engine (deterministic idea generation)
 - **Depends on:** S1.7
-- **Acceptance:** [ ] emits candidate actions + numeric features · [ ] tests · [ ] LLM-free.
-- **Landed:** —
+- **Acceptance:** [x] emits candidate actions + numeric features · [x] tests · [x] LLM-free.
+- **Landed:** 2026-07-09 · in-session · `domain/signals.py`, 8 tests.
+- **Notes:** Three rule families: rebalance (class over cap+1% tolerance → trim largest), take_profit
+  (≥25% unrealized gain → trim), momentum (watchlist 20-bar return ≥5%, buys suppressed while
+  paused/drawdown). Deterministic ordering, ≤5 candidates, features are the ONLY numbers
+  explanations may cite.
 
-## `[ ]` S2.2 — RAG context assembly + vector store
+## `[x]` S2.2 — RAG context assembly + vector store
 - **Depends on:** S1.2
-- **Acceptance:** [ ] retrieves cited, fresh evidence with provenance · [ ] ingested text treated as
+- **Acceptance:** [x] retrieves cited, fresh evidence with provenance · [x] ingested text treated as
   untrusted (injection-sandboxed).
-- **Landed:** —
+- **Landed:** 2026-07-09 · in-session · `evidence_docs` (migration 0004) + `services/retrieval.py`; FTS live-verified.
+- **Notes:** Operator-frozen: lexical retrieval (Postgres tsvector+GIN; sqlite LIKE fallback for unit
+  tests) instead of embeddings — no extra API keys; interface allows embeddings swap later. Ingestion
+  (S1.2) indexes news+fundamentals automatically. Sandbox: angle brackets neutralized, control chars
+  stripped, docs wrapped in <evidence> envelopes declared as data-not-instructions; corpus is shared
+  market data, deliberately outside RLS.
 
-## `[ ]` S2.3 — AI orchestration pipeline + schema validation
+## `[x]` S2.3 — AI orchestration pipeline + schema validation
 - **Depends on:** S2.1, S2.2
-- **Acceptance:** [ ] malformed LLM output rejected/retried · [ ] **risk layer (S1.3) validates AFTER
-  the LLM** · [ ] cadence/quantity caps enforced (0–3 suggestions).
-- **Landed:** —
+- **Acceptance:** [x] malformed LLM output rejected/retried · [x] **risk layer (S1.3) validates AFTER
+  the LLM** · [x] cadence/quantity caps enforced (0–3 suggestions).
+- **Landed:** 2026-07-09 · in-session · `llm/` package + `services/agent.py`, 7 pipeline tests.
+- **Notes:** Operator-frozen: multi-provider LLM layer — `ALPHADASH_LLM_PROVIDER=fake|anthropic|
+  openai|github`. Anthropic = claude-opus-4-8 (adaptive thinking); OpenAI + GitHub Models share the
+  OpenAI-compat adapter (github → models.github.ai, PAT). No keys yet → default `fake` (rule-based
+  deterministic FakeLLM; whole product works offline). Faithfulness: candidates+sizing computed
+  BEFORE the LLM; unknown candidate_ref rejected (LLM cannot invent trades); rationale ≤3 sentences
+  enforced; ≤3 attempts with error feedback then run=failed. prompt_version s2.3-v1.
 
-## `[ ]` S2.4 — Explanation assembly → Suggestion object
+## `[x]` S2.4 — Explanation assembly → Suggestion object
 - **Depends on:** S2.3, S1.3
-- **Acceptance:** [ ] produces the **S0.4 `Suggestion` contract** exactly · [ ] explanation generated
-  from deterministic candidate features (faithfulness) · [ ] blocked suggestions carry `blockedReason`.
-- **Landed:** —
+- **Acceptance:** [x] produces the **S0.4 `Suggestion` contract** exactly · [x] explanation generated
+  from deterministic candidate features (faithfulness) · [x] blocked suggestions carry `blockedReason`.
+- **Landed:** 2026-07-09 · in-session · `suggestion_to_view` in services/agent.py; contract-tested.
+- **Notes:** Evidence array = cited docs (provenance) + `signal:<kind>` feature claims. Money strings,
+  camelCase, blockedReason iff blocked. Vetoed suggestions also raise `risk_events(veto, suggestion_id)`.
 
-## `[ ]` S2.5 — Suggestion Card wired to live data
+## `[x]` S2.5 — Suggestion Card wired to live data
 - **Depends on:** S0.4, S2.4, S1.9
-- **Acceptance:** [ ] renders real suggestions · [ ] Approve→execute via S1.5 · [ ] Modify/Dismiss
+- **Acceptance:** [x] renders real suggestions · [x] Approve→execute via S1.5 · [x] Modify/Dismiss
   persist `decisions`.
-- **Landed:** —
+- **Landed:** 2026-07-09 · in-session · `api/suggestions.py` + `SuggestionsPanel.tsx`; 8 API + 3 UI tests.
+- **Notes:** POST /agent/run · GET /suggestions · approve/modify/dismiss (decisions + journal).
+  Approve executes with idempotency key `suggestion:<id>` (double-approve → 409, no double order).
+  Execution-time veto re-marks suggestion blocked with reasons (honest failure). Suggestions expire
+  after 3 days (swept on GET). Starter watchlist (AAPL/MSFT/BTCUSD) provisioned at registration.
 
-## `[ ]` S2.6 — Explanation trace (L3 "show your work")
+## `[x]` S2.6 — Explanation trace (L3 "show your work")
 - **Depends on:** S2.5
-- **Acceptance:** [ ] shows candidate logic → source data → prompt/model version.
-- **Landed:** —
+- **Acceptance:** [x] shows candidate logic → source data → prompt/model version.
+- **Landed:** 2026-07-09 · in-session · GET /suggestions/{id}/trace + `ExplanationTrace.tsx`.
+- **Notes:** Three-step trace: deterministic signal features → cited sources + snapshot id/as-of
+  (no-lookahead) → model/prompt version + risk events. Rendered as DisclosurePanel under each card.
 
-## `[ ]` S2.7 — Conversational Q&A endpoint + streaming
+## `[x]` S2.7 — Conversational Q&A endpoint + streaming
 - **Depends on:** S2.2, S2.3
-- **Acceptance:** [ ] grounded, cited answers · [ ] reframes "should I buy X?" as education + bounded
-  option, never a bare directive · [ ] SSE/WS streaming.
-- **Landed:** —
+- **Acceptance:** [x] grounded, cited answers · [x] reframes "should I buy X?" as education + bounded
+  option, never a bare directive · [x] SSE/WS streaming.
+- **Landed:** 2026-07-09 · in-session · POST /chat (SSE: token/sources/error/done events).
+- **Notes:** Grounded in live portfolio numbers + sandboxed evidence with [n] citations; guardrail
+  system prompt (education-not-directives, no profit promises, jargon defined). Stream errors surface
+  as SSE `error` events, not broken sockets. Works across all 4 LLM providers.
 
-## `[ ]` S2.8 — Chat UI + streaming
+## `[x]` S2.8 — Chat UI + streaming
 - **Depends on:** S2.7, S1.10
-- **Acceptance:** [ ] tokens stream · [ ] sources shown.
-- **Landed:** —
+- **Acceptance:** [x] tokens stream · [x] sources shown.
+- **Landed:** 2026-07-09 · in-session · `ChatPanel.tsx` on Agent screen; streaming + error UI tests.
+- **Notes:** fetch-ReadableStream SSE parser in `lib/api.ts::streamChat`; incremental token render,
+  SourceChips per answer, aria-live message list. Card "Ask" button focuses chat input.
 
-## `[ ]` S2.9 — Eval harness + red-team + calibration (land early, alongside S2.3)
+## `[x]` S2.9 — Eval harness + red-team + calibration (land early, alongside S2.3)
 - **Depends on:** S2.3
-- **Acceptance:** [ ] safety evals in CI (no profit-promising, veto surfacing, citations, jargon
-  avoidance) · [ ] prompt-injection red-team · [ ] confidence-calibration tracking.
-- **Landed:** —
+- **Acceptance:** [x] safety evals in CI (no profit-promising, veto surfacing, citations, jargon
+  avoidance) · [x] prompt-injection red-team · [x] confidence-calibration tracking.
+- **Landed:** 2026-07-09 · in-session · `evals/checks.py` + `services/calibration.py` + tests/test_evals.py (10 checks in CI).
+- **Notes:** Deterministic lexicon checks (profit promises, naked directives, unexplained jargon,
+  citation discipline, paper disclaimer) run over pipeline+chat output on every push (fake LLM floor).
+  Red team: hostile evidence with canary + envelope-escape attempt — sandbox neutralizes markup,
+  canary never emitted. Same checks run against live providers via ALPHADASH_RUN_LIVE_EVALS=1.
+  Calibration: confidence bands (S0.4 thresholds) × executed outcome hit-rate; honest small-sample note.
 
 ---
 
@@ -496,6 +529,18 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
   · `[ ]` S5.4 Jurisdiction rollout. **Reuses the Phase 1 safety spine — no re-architecture.**
 
 ---
+
+## Appendix — Playwright e2e (project rule since Phase 2)
+- **Every UI surface must have a Playwright spec** under `alphadash/frontend/e2e/`.
+- Stack is hermetic: FastAPI (fresh sqlite, `ALPHADASH_CREATE_ALL=1`, stub providers, fake LLM) on
+  :8710 + Vite on :5273 — no keys, no network. `npm run test:e2e`; CI job `e2e` uploads traces on failure.
+- Local WSL: chromium needs `libasound2`; extracted to `~/.local/pwlibs` (script prepends
+  LD_LIBRARY_PATH) — no sudo required. CI uses `playwright install --with-deps`.
+- Current coverage: auth (register/login/logout/enumeration), shell (nav, paper badge, kill switch
+  two-tap + veto while paused), portfolio+ticket (fill updates holdings, veto teaching note), agent
+  (run → cards → L2 → L3 trace → approve executes → portfolio updated; dismiss), chat (streamed
+  educational answer + disclaimer). e2e caught two real bugs vitest missed: fetch header-merge
+  dropping Content-Type (422 on orders) and logout not flipping the auth gate.
 
 ## Appendix — conventions (apply to every session)
 - Python: `uv`, `ruff` (line-length 100), `pytest` (`integration` marker skipped in CI), pydantic v2,
