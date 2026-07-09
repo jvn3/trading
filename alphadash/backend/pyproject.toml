@@ -1,0 +1,60 @@
+[project]
+name = "alphadash-backend"
+version = "0.0.1"
+description = "AlphaDash beginner strategy-agent product — backend BFF and services (paper-trading first)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Jay Nayee", email = "jvn3@njit.edu" }
+]
+dependencies = [
+    "fastapi>=0.136.0",
+    "uvicorn[standard]>=0.44.0",
+    "pydantic>=2.13.2",
+    "pydantic-settings>=2.13.1",
+    "python-dotenv>=1.2.2",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+]
+
+# Reuse of the personal engine's provider/risk/executor code is wired in at S1.1 via:
+#   [tool.uv.sources]
+#   jay-trading = { path = "../..", editable = true }
+# Intentionally omitted here so the S0.1 scaffold stays isolated and green.
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "alphadash"
+module-root = "src"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: hits real network or a real database (skipped in CI by default)",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=1.20.1",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.11",
+]
