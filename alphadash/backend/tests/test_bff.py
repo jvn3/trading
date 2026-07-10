@@ -55,7 +55,7 @@ def test_account_reports_paper_mode_and_limits(client) -> None:
     assert account["paused"] is False
 
     limits = client.get("/account/limits").json()
-    assert limits["per_suggestion_max_pct"] == "5.00000000"
+    assert limits["per_suggestion_max_pct"] == "5"  # S3.7: human-normalized, no Numeric(24,8) noise
     assert limits["max_asset_class_pct"]["crypto"] == "10"
     assert limits["max_trades_per_week"] == 5
 

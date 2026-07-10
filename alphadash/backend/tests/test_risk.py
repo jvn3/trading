@@ -229,3 +229,37 @@ def test_property_never_short(held, ask) -> None:
     d = validate_order(sell(qty=str(ask), price="1"), state, RiskLimitSet())
     if d.allow:
         assert ask <= held
+
+
+def test_veto_copy_has_no_trailing_zero_noise() -> None:
+    """S3.7 microcopy: Numeric(24,8) limits must not render as 10.00000000 in veto messages."""
+    from alphadash.db.models import AssetClass, OrderSide
+    from alphadash.domain.risk import (
+        AccountState,
+        OrderIntent,
+        RiskLimitSet,
+        validate_order,
+    )
+
+    state = AccountState(
+        equity=Decimal("10000.00000000"),
+        cash=Decimal("10000.00000000"),
+        positions={},
+        trades_this_week=0,
+        drawdown_pct=Decimal("0"),
+    )
+    limits = RiskLimitSet(per_suggestion_max_pct=Decimal("5.00000000"))
+    decision = validate_order(
+        OrderIntent(
+            symbol="AAPL",
+            asset_class=AssetClass.equity,
+            side=OrderSide.buy,
+            qty=Decimal("10"),
+            price=Decimal("100"),
+        ),
+        state,
+        limits,
+    )
+    assert not decision.allow
+    assert "limit is 5% per trade" in decision.reason
+    assert "5.00000000" not in decision.reason

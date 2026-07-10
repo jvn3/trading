@@ -6,6 +6,7 @@ import { money } from "../../lib/format";
 import { ActionButton } from "../../ui/ActionButton";
 import { Card } from "../../ui/Card";
 import { SourceChip } from "../../ui/SourceChip";
+import { Term } from "../../ui/Term";
 import { color, font, radius, space } from "../../ui/tokens";
 
 // S1.12 manual paper order ticket — the Phase 1 exit gate. Quote (with provenance) previews the
@@ -119,9 +120,10 @@ export function OrderTicket() {
               onChange={(e) => setQtyInput(e.target.value)}
             />
           </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
-            Order type
+          <div style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
+            <label htmlFor="order-type">Order type</label>
             <select
+              id="order-type"
               style={selectStyle}
               value={orderType}
               onChange={(e) => setOrderType(e.target.value as "market" | "limit")}
@@ -129,7 +131,11 @@ export function OrderTicket() {
               <option value="market">Market</option>
               <option value="limit">Limit</option>
             </select>
-          </label>
+            <span style={{ fontSize: font.sizeSm, color: color.textMuted }}>
+              What's a <Term k="market order">market</Term> or{" "}
+              <Term k="limit order">limit</Term> order?
+            </span>
+          </div>
           {orderType === "limit" && (
             <label style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
               Limit price

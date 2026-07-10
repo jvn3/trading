@@ -10,7 +10,7 @@ test("place a paper trade end-to-end: quote → confirm → fill → holdings up
 
   // Portfolio essentials: benchmark + drawdown framing visible
   await expect(page.getByText("Total value (simulated)")).toBeVisible();
-  await expect(page.getByText(/SPY same period/)).toBeVisible();
+  await expect(page.getByText(/SPY same period/).first()).toBeVisible();
   await expect(page.getByText("Max drawdown (90d)")).toBeVisible();
 
   // Quote preview with provenance

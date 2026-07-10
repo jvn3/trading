@@ -47,7 +47,64 @@ export function renderWithProviders(ui: ReactNode, { route = "/" } = {}) {
   );
 }
 
-export const ME = { id: "u1", email: "t@example.com", display_name: "Tess" };
+export const ME = { id: "u1", email: "t@example.com", display_name: "Tess", onboarded: true };
+export const ME_FRESH = { ...ME, onboarded: false };
+export const LIMITS = {
+  max_position_pct: "10",
+  max_asset_class_pct: { equity: "80", crypto: "10" },
+  max_trades_per_week: 5,
+  cash_floor_pct: "10",
+  per_suggestion_max_pct: "5",
+  drawdown_pause_pct: "15",
+};
+export const REVIEW = {
+  performance: {
+    points: [],
+    return_pct: 1.0,
+    benchmark_return_pct: 0.5,
+    max_drawdown_pct: 2.5,
+    current_drawdown_pct: 0.0,
+    benchmark_symbol: "SPY",
+  },
+  trades: { closed_trades: 2, wins: 1, losses: 1, win_rate_pct: 50.0, small_sample: true },
+  verdict: "You're ahead of SPY by 0.50 percentage points over this period.",
+  disclaimers: [
+    "This is a simulated paper account — no real money is at risk and real-world fills, fees and taxes would differ.",
+    "Past performance (simulated or real) does not predict future results.",
+    "This is not investment advice.",
+  ],
+};
+export const DIGEST = {
+  created: true,
+  notification: {
+    id: "n1",
+    kind: "digest",
+    title: "Your 2026-07-09 digest",
+    body: "Portfolio value $10000.00 · 0 trade(s) in the last 24h · 1 open suggestion(s).",
+    created_at: "2026-07-09T09:00:00+00:00",
+    read_at: null,
+    payload: {
+      date: "2026-07-09",
+      read: [
+        {
+          title: "Apple services revenue climbs",
+          source: "stub-news",
+          published_at: "2026-07-09T08:00:00+00:00",
+          symbols: ["AAPL"],
+          url: null,
+        },
+      ],
+      what_changed: {
+        equity: "10000.00000000",
+        cash: "10000.00000000",
+        fills_24h: [],
+        risk_events_24h: [],
+      },
+      suggestions: [{ id: "s1", headline: "Consider a small buy of AAPL", confidence: "0.62" }],
+      disclaimer: "Simulated paper account. Educational, not investment advice.",
+    },
+  },
+};
 export const ACCOUNT = {
   id: "a1",
   mode: "paper",

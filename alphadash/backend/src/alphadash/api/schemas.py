@@ -103,3 +103,87 @@ class QuoteOut(BaseModel):
     as_of: str
     source: str
     is_stale: bool
+
+
+# --- S3.x beginner-experience shapes ---
+
+
+class OnboardingRequest(BaseModel):
+    experience: str = Field(pattern="^(new|some|confident)$")
+    drop_reaction: str = Field(pattern="^(sell|wait|buy_more)$")
+    goal: str = Field(pattern="^(preserve|learn|grow)$")
+
+
+class OnboardingOut(BaseModel):
+    profile: str  # conservative | balanced | curious
+    limits: LimitsOut
+    onboarded: bool
+
+
+class OnboardingStatusOut(BaseModel):
+    onboarded: bool
+    profiles: dict[str, LimitsOut]  # preset name -> limits, for the wizard's teaching copy
+
+
+class LimitsUpdateRequest(BaseModel):
+    max_position_pct: str  # Decimal strings, like everything money-adjacent
+    max_asset_class_pct: dict[str, str]  # keys: equity, crypto
+    max_trades_per_week: int = Field(ge=0, le=100)
+    cash_floor_pct: str
+    per_suggestion_max_pct: str
+    drawdown_pause_pct: str
+
+
+class LimitsUpdateOut(BaseModel):
+    limits: LimitsOut
+    profile: str
+    loosened: list[str]  # field names the edit made MORE permissive (teaching copy hook)
+
+
+class NotificationOut(BaseModel):
+    id: str
+    kind: str
+    title: str
+    body: str
+    payload: dict
+    created_at: str
+    read_at: str | None
+
+
+class DigestOut(BaseModel):
+    notification: NotificationOut
+    created: bool
+
+
+class NudgeOut(BaseModel):
+    kind: str
+    severity: str
+    message: str
+
+
+class JournalEntryOut(BaseModel):
+    id: str
+    entry_type: str
+    ref_id: str
+    payload: dict
+    created_at: str
+
+
+class JournalOut(BaseModel):
+    entries: list[JournalEntryOut]
+    nudges: list[NudgeOut]
+
+
+class ClosedTradesOut(BaseModel):
+    closed_trades: int
+    wins: int
+    losses: int
+    win_rate_pct: float | None
+    small_sample: bool
+
+
+class ReviewOut(BaseModel):
+    performance: PerformanceOut
+    trades: ClosedTradesOut
+    verdict: str
+    disclaimers: list[str]

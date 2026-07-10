@@ -247,6 +247,63 @@
       }
      }
     }
+   },
+   "put": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Update Account Limits",
+    "operationId": "update_account_limits_account_limits_put",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LimitsUpdateRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LimitsUpdateOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
    }
   },
   "/account/pause": {
@@ -440,6 +497,68 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/PerformanceOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/portfolio/review": {
+   "get": {
+    "tags": [
+     "portfolio"
+    ],
+    "summary": "Performance Review",
+    "description": "S3.5 honest review: return is never served without benchmark + drawdown beside it.",
+    "operationId": "performance_review_portfolio_review_get",
+    "parameters": [
+     {
+      "name": "days",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 365,
+       "minimum": 7,
+       "default": 90,
+       "title": "Days"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReviewOut"
         }
        }
       }
@@ -1053,6 +1172,355 @@
     }
    }
   },
+  "/onboarding": {
+   "get": {
+    "tags": [
+     "onboarding"
+    ],
+    "summary": "Onboarding Status",
+    "operationId": "onboarding_status_onboarding_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OnboardingStatusOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "onboarding"
+    ],
+    "summary": "Complete Onboarding",
+    "operationId": "complete_onboarding_onboarding_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/OnboardingRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OnboardingOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/digest/run": {
+   "post": {
+    "tags": [
+     "notifications"
+    ],
+    "summary": "Run Digest",
+    "operationId": "run_digest_digest_run_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DigestOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/notifications": {
+   "get": {
+    "tags": [
+     "notifications"
+    ],
+    "summary": "List Notifications",
+    "operationId": "list_notifications_notifications_get",
+    "parameters": [
+     {
+      "name": "unread_only",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "default": false,
+       "title": "Unread Only"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/NotificationOut"
+         },
+         "title": "Response List Notifications Notifications Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/notifications/{notification_id}/read": {
+   "post": {
+    "tags": [
+     "notifications"
+    ],
+    "summary": "Mark Read",
+    "operationId": "mark_read_notifications__notification_id__read_post",
+    "parameters": [
+     {
+      "name": "notification_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Notification Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/NotificationOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/journal": {
+   "get": {
+    "tags": [
+     "journal"
+    ],
+    "summary": "Read Journal",
+    "operationId": "read_journal_journal_get",
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "maximum": 200,
+       "minimum": 1,
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JournalOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/health": {
    "get": {
     "tags": [
@@ -1185,6 +1653,46 @@
     ],
     "title": "ChatRequest"
    },
+   "ClosedTradesOut": {
+    "properties": {
+     "closed_trades": {
+      "type": "integer",
+      "title": "Closed Trades"
+     },
+     "wins": {
+      "type": "integer",
+      "title": "Wins"
+     },
+     "losses": {
+      "type": "integer",
+      "title": "Losses"
+     },
+     "win_rate_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Win Rate Pct"
+     },
+     "small_sample": {
+      "type": "boolean",
+      "title": "Small Sample"
+     }
+    },
+    "type": "object",
+    "required": [
+     "closed_trades",
+     "wins",
+     "losses",
+     "win_rate_pct",
+     "small_sample"
+    ],
+    "title": "ClosedTradesOut"
+   },
    "DecisionRequest": {
     "properties": {
      "reason": {
@@ -1245,6 +1753,23 @@
      "suggestion"
     ],
     "title": "DecisionResult"
+   },
+   "DigestOut": {
+    "properties": {
+     "notification": {
+      "$ref": "#/components/schemas/NotificationOut"
+     },
+     "created": {
+      "type": "boolean",
+      "title": "Created"
+     }
+    },
+    "type": "object",
+    "required": [
+     "notification",
+     "created"
+    ],
+    "title": "DigestOut"
    },
    "FillOut": {
     "properties": {
@@ -1310,6 +1835,64 @@
     ],
     "title": "HealthResponse",
     "description": "Shape returned by ``GET /health`` (frozen contract for S0.1)."
+   },
+   "JournalEntryOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "entry_type": {
+      "type": "string",
+      "title": "Entry Type"
+     },
+     "ref_id": {
+      "type": "string",
+      "title": "Ref Id"
+     },
+     "payload": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Payload"
+     },
+     "created_at": {
+      "type": "string",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "entry_type",
+     "ref_id",
+     "payload",
+     "created_at"
+    ],
+    "title": "JournalEntryOut"
+   },
+   "JournalOut": {
+    "properties": {
+     "entries": {
+      "items": {
+       "$ref": "#/components/schemas/JournalEntryOut"
+      },
+      "type": "array",
+      "title": "Entries"
+     },
+     "nudges": {
+      "items": {
+       "$ref": "#/components/schemas/NudgeOut"
+      },
+      "type": "array",
+      "title": "Nudges"
+     }
+    },
+    "type": "object",
+    "required": [
+     "entries",
+     "nudges"
+    ],
+    "title": "JournalOut"
    },
    "LimitsOut": {
     "properties": {
@@ -1387,6 +1970,74 @@
     ],
     "title": "LimitsOut"
    },
+   "LimitsUpdateOut": {
+    "properties": {
+     "limits": {
+      "$ref": "#/components/schemas/LimitsOut"
+     },
+     "profile": {
+      "type": "string",
+      "title": "Profile"
+     },
+     "loosened": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Loosened"
+     }
+    },
+    "type": "object",
+    "required": [
+     "limits",
+     "profile",
+     "loosened"
+    ],
+    "title": "LimitsUpdateOut"
+   },
+   "LimitsUpdateRequest": {
+    "properties": {
+     "max_position_pct": {
+      "type": "string",
+      "title": "Max Position Pct"
+     },
+     "max_asset_class_pct": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Max Asset Class Pct"
+     },
+     "max_trades_per_week": {
+      "type": "integer",
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Max Trades Per Week"
+     },
+     "cash_floor_pct": {
+      "type": "string",
+      "title": "Cash Floor Pct"
+     },
+     "per_suggestion_max_pct": {
+      "type": "string",
+      "title": "Per Suggestion Max Pct"
+     },
+     "drawdown_pause_pct": {
+      "type": "string",
+      "title": "Drawdown Pause Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "max_position_pct",
+     "max_asset_class_pct",
+     "max_trades_per_week",
+     "cash_floor_pct",
+     "per_suggestion_max_pct",
+     "drawdown_pause_pct"
+    ],
+    "title": "LimitsUpdateRequest"
+   },
    "LoginRequest": {
     "properties": {
      "email": {
@@ -1419,6 +2070,11 @@
      "display_name": {
       "type": "string",
       "title": "Display Name"
+     },
+     "onboarded": {
+      "type": "boolean",
+      "title": "Onboarded",
+      "default": false
      }
     },
     "type": "object",
@@ -1428,6 +2084,149 @@
      "display_name"
     ],
     "title": "MeResponse"
+   },
+   "NotificationOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "title": {
+      "type": "string",
+      "title": "Title"
+     },
+     "body": {
+      "type": "string",
+      "title": "Body"
+     },
+     "payload": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Payload"
+     },
+     "created_at": {
+      "type": "string",
+      "title": "Created At"
+     },
+     "read_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Read At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "title",
+     "body",
+     "payload",
+     "created_at",
+     "read_at"
+    ],
+    "title": "NotificationOut"
+   },
+   "NudgeOut": {
+    "properties": {
+     "kind": {
+      "type": "string",
+      "title": "Kind"
+     },
+     "severity": {
+      "type": "string",
+      "title": "Severity"
+     },
+     "message": {
+      "type": "string",
+      "title": "Message"
+     }
+    },
+    "type": "object",
+    "required": [
+     "kind",
+     "severity",
+     "message"
+    ],
+    "title": "NudgeOut"
+   },
+   "OnboardingOut": {
+    "properties": {
+     "profile": {
+      "type": "string",
+      "title": "Profile"
+     },
+     "limits": {
+      "$ref": "#/components/schemas/LimitsOut"
+     },
+     "onboarded": {
+      "type": "boolean",
+      "title": "Onboarded"
+     }
+    },
+    "type": "object",
+    "required": [
+     "profile",
+     "limits",
+     "onboarded"
+    ],
+    "title": "OnboardingOut"
+   },
+   "OnboardingRequest": {
+    "properties": {
+     "experience": {
+      "type": "string",
+      "pattern": "^(new|some|confident)$",
+      "title": "Experience"
+     },
+     "drop_reaction": {
+      "type": "string",
+      "pattern": "^(sell|wait|buy_more)$",
+      "title": "Drop Reaction"
+     },
+     "goal": {
+      "type": "string",
+      "pattern": "^(preserve|learn|grow)$",
+      "title": "Goal"
+     }
+    },
+    "type": "object",
+    "required": [
+     "experience",
+     "drop_reaction",
+     "goal"
+    ],
+    "title": "OnboardingRequest"
+   },
+   "OnboardingStatusOut": {
+    "properties": {
+     "onboarded": {
+      "type": "boolean",
+      "title": "Onboarded"
+     },
+     "profiles": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/LimitsOut"
+      },
+      "type": "object",
+      "title": "Profiles"
+     }
+    },
+    "type": "object",
+    "required": [
+     "onboarded",
+     "profiles"
+    ],
+    "title": "OnboardingStatusOut"
    },
    "OrderOut": {
     "properties": {
@@ -1785,6 +2584,35 @@
      "display_name"
     ],
     "title": "RegisterRequest"
+   },
+   "ReviewOut": {
+    "properties": {
+     "performance": {
+      "$ref": "#/components/schemas/PerformanceOut"
+     },
+     "trades": {
+      "$ref": "#/components/schemas/ClosedTradesOut"
+     },
+     "verdict": {
+      "type": "string",
+      "title": "Verdict"
+     },
+     "disclaimers": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Disclaimers"
+     }
+    },
+    "type": "object",
+    "required": [
+     "performance",
+     "trades",
+     "verdict",
+     "disclaimers"
+    ],
+    "title": "ReviewOut"
    },
    "SuggestionListOut": {
     "properties": {

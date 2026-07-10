@@ -63,6 +63,7 @@ export function ChatPanel() {
 
         <div
           ref={listRef}
+          role="log"
           aria-live="polite"
           aria-label="Chat messages"
           style={{ display: "flex", flexDirection: "column", gap: space.sm, maxHeight: 360, overflowY: "auto" }}

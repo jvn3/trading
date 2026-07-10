@@ -28,6 +28,7 @@ class MeResponse(BaseModel):
     id: str
     email: str
     display_name: str
+    onboarded: bool = False  # S3.1: false until the guided interview completes
 
 
 def _set_cookie(response: Response, request: Request, token: str) -> None:
@@ -55,7 +56,12 @@ def register(
         raise HTTPException(status_code=400, detail=str(e)) from None
     _set_cookie(response, request, token)
     user = registered.user
-    return MeResponse(id=user.id, email=user.email, display_name=user.display_name)
+    return MeResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        onboarded=user.onboarded_at is not None,
+    )
 
 
 @router.post("/login", response_model=MeResponse)
@@ -69,7 +75,12 @@ def login(
     except auth_service.AuthError as e:
         raise HTTPException(status_code=401, detail=str(e)) from None
     _set_cookie(response, request, token)
-    return MeResponse(id=user.id, email=user.email, display_name=user.display_name)
+    return MeResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        onboarded=user.onboarded_at is not None,
+    )
 
 
 @router.post("/logout", status_code=204)
@@ -84,4 +95,9 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)) 
 
 @router.get("/me", response_model=MeResponse)
 def me(user: User = Depends(get_current_user)) -> MeResponse:
-    return MeResponse(id=user.id, email=user.email, display_name=user.display_name)
+    return MeResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        onboarded=user.onboarded_at is not None,
+    )

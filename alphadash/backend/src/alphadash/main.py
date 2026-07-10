@@ -14,6 +14,9 @@ from pydantic import BaseModel
 from alphadash import __version__
 from alphadash.api.auth import router as auth_router
 from alphadash.api.chat import router as chat_router
+from alphadash.api.journal import router as journal_router
+from alphadash.api.notifications import router as notifications_router
+from alphadash.api.onboarding import router as onboarding_router
 from alphadash.api.orders import router as orders_router
 from alphadash.api.portfolio import router as portfolio_router
 from alphadash.api.suggestions import router as suggestions_router
@@ -62,6 +65,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(orders_router)
     app.include_router(suggestions_router)
     app.include_router(chat_router)
+    app.include_router(onboarding_router)
+    app.include_router(notifications_router)
+    app.include_router(journal_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:

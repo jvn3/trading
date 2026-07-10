@@ -74,7 +74,7 @@ def two_tenants(engine):
         db.commit()
     yield created
     with Session(engine) as db:  # cleanup (no app.user_id → need per-user context to delete)
-        for who, ids in created.items():
+        for _who, ids in created.items():
             db.execute(
                 text("SELECT set_config('app.user_id', :uid, true)"), {"uid": ids["user_id"]}
             )
@@ -117,7 +117,7 @@ def _as(db: Session, user_id: str) -> None:
 
 
 def test_cross_tenant_read_blocked(engine, two_tenants) -> None:
-    alice, bob = two_tenants["alice"], two_tenants["bob"]
+    alice = two_tenants["alice"]
     with Session(engine) as db:
         _as(db, alice["user_id"])
         accounts = db.scalars(select(Account)).all()
