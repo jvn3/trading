@@ -19,7 +19,9 @@ from alphadash.api.notifications import router as notifications_router
 from alphadash.api.onboarding import router as onboarding_router
 from alphadash.api.orders import router as orders_router
 from alphadash.api.portfolio import router as portfolio_router
+from alphadash.api.strategies import router as strategies_router
 from alphadash.api.suggestions import router as suggestions_router
+from alphadash.api.whatif import router as whatif_router
 from alphadash.config import Settings, get_settings
 from alphadash.db.session import build_engine, build_session_factory
 from alphadash.llm.factory import build_llm
@@ -68,6 +70,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(onboarding_router)
     app.include_router(notifications_router)
     app.include_router(journal_router)
+    app.include_router(strategies_router)
+    app.include_router(whatif_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:

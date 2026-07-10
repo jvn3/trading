@@ -5,6 +5,7 @@ import { Shell } from "./app/Shell";
 import { AuthScreen } from "./features/auth/AuthScreen";
 import { OnboardingWizard } from "./features/onboarding/OnboardingWizard";
 import { PortfolioScreen } from "./features/portfolio/PortfolioScreen";
+import { StrategyLab } from "./features/strategies/StrategyLab";
 import { api, ApiError } from "./lib/api";
 import { AgentScreen } from "./screens/AgentScreen";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -50,6 +51,7 @@ export function AuthedApp() {
       <Route element={<Shell onLogout={logout} />}>
         <Route index element={<HomeScreen />} />
         <Route path="agent" element={<AgentScreen />} />
+        <Route path="strategies" element={<StrategyLab />} />
         <Route path="portfolio" element={<PortfolioScreen />} />
         <Route path="journal" element={<JournalScreen />} />
         <Route path="learn" element={<LearnScreen />} />

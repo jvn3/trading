@@ -127,6 +127,75 @@ export const PERFORMANCE = {
   current_drawdown_pct: 0.0,
   benchmark_symbol: "SPY",
 };
+export const BACKTEST = {
+  strategy_id: "st1",
+  windows: [
+    {
+      start: "2026-01-01",
+      end: "2026-04-01",
+      strategy_return_pct: 4.2,
+      buy_hold_return_pct: 6.1,
+      trades: 2,
+    },
+    {
+      start: "2026-04-02",
+      end: "2026-07-01",
+      strategy_return_pct: 3.0,
+      buy_hold_return_pct: 1.5,
+      trades: 1,
+    },
+  ],
+  total_return_pct: 7.3,
+  buy_hold_return_pct: 7.7,
+  benchmark_return_pct: 5.0,
+  max_drawdown_pct: 9.5,
+  closed_trades: 3,
+  win_rate_pct: 66.67,
+  windows_beating_buy_hold: 1,
+  small_sample: true,
+  days: 180,
+  caveats: [
+    "Only 3 closed trade(s) — far too few to distinguish luck from edge.",
+    "Past performance (simulated or real) does not predict future results.",
+  ],
+};
+export const STRATEGY = {
+  id: "st1",
+  name: "AAPL price above sma rule",
+  source_text: "Buy AAPL when above its 20 day average, sell at 10% profit or 5% loss",
+  status: "draft",
+  params: {
+    symbol: "AAPL",
+    asset_class: "equity",
+    entry: { kind: "price_above_sma", window: 20, threshold_pct: null },
+    exit_condition: null,
+    take_profit_pct: "10",
+    stop_loss_pct: "5",
+    size_pct: "5",
+  },
+  description:
+    "Buy AAPL with 5% of the portfolio when the price closes above its 20-day average. Sell when the position is down 5% (stop loss) or the position is up 10% (take profit). Every trade still passes your safety limits before it can execute.",
+  created_at: "2026-07-10T09:00:00+00:00",
+  last_backtest: null,
+};
+export const SHOCK_IMPACT = {
+  equity_before: "10000.00000000",
+  equity_after: "9160.00",
+  equity_change_pct: "-8.40",
+  cash: "5790.00000000",
+  positions: [
+    {
+      symbol: "AAPL",
+      asset_class: "equity",
+      value_before: "4210.00",
+      value_after: "3370.00",
+      applied_pct: "-20",
+    },
+  ],
+  allocation_after_pct: { equity: 36.79, cash: 63.21 },
+  would_trip_drawdown_pause: false,
+  drawdown_pause_pct: "15",
+};
 export const QUOTE = {
   symbol: "AAPL",
   price: "210.50",

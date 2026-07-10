@@ -34,7 +34,7 @@ Companion to the blueprint: [docs/product/beginner_agent_product_blueprint.md](.
 | 1 | Safety & data spine (no AI) | S1.1–S1.12 | 12 / 12 |
 | 2 | The agent | S2.1–S2.9 | 9 / 9 |
 | 3 | Beginner experience | S3.1–S3.7 | 7 / 7 |
-| 4 | Trust-earning extensions | S4.x | not scoped |
+| 4 | Trust-earning extensions | S4.1–S4.7 | 2 / 7 (S4.2, S4.3; rest unscoped) |
 | 5 | Real-money mode (gated) | S5.x | not scoped |
 
 **Phase gate — do not start Phase 2 until this is true:** a user can place a limit-checked,
@@ -548,12 +548,51 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
 
 ---
 
-# Phase 4 — Trust-earning extensions (not scoped — freeze when reached)
-- `[ ]` S4.1 Bounded auto-mode (only after risk layer battle-tested in beta)
-- `[ ]` S4.2 User-authored simple strategies (NL → deterministic rules) + backtesting (walk-forward)
-- `[ ]` S4.3 Scenario / what-if simulator
-- `[ ]` S4.4 Richer sentiment/social ingestion + manipulation defenses
-- `[ ]` S4.5 Goal-based planning · `[ ]` S4.6 Voice · `[ ]` S4.7 Tax-lot awareness
+# Phase 4 — Trust-earning extensions (S4.2 + S4.3 scoped & built 2026-07-10; rest unscoped)
+
+- `[ ]` S4.1 Bounded auto-mode (only after risk layer battle-tested in beta — gate untouched)
+
+## `[x]` S4.2 — User-authored simple strategies (NL → deterministic rules) + walk-forward backtest
+- **Depends on:** S2.3, S1.3 — **Acceptance:** [x] NL → schema-validated deterministic rules,
+  shown back in plain language before anything runs · [x] walk-forward backtest with buy&hold +
+  benchmark + caveats on every payload · [x] activation gated on a backtest · [x] active
+  strategies feed the NORMAL agent pipeline (suggest → human approve → risk gate) — they never
+  place orders themselves. · **Landed:** 2026-07-10 · dev branch.
+
+### FROZEN CONTRACT — S4.2 rule schema (`domain/strategy_rules.py`)
+- Conditions on daily EOD closes: `price_above_sma` / `price_below_sma` (window 2–200),
+  `return_exceeds` / `return_below` (window + threshold_pct 0.5–95).
+- Entry: exactly one condition. Exit: optional condition + optional take_profit_pct (1–500) /
+  stop_loss_pct (1–95); **at least one exit mechanism required**. `size_pct` 0.5–20, and
+  `size_buy` still clamps under the user's own per-trade cap at suggestion time.
+- Exit precedence: stop loss → take profit → exit condition. Insufficient history → no signal
+  (never guess).
+- **Notes:** LLM (any provider; FakeLLM keyword-parser for offline dev/e2e, marker
+  `STRATEGY_TEXT:`) only authors the document — ≤3 attempts with error feedback, prompt
+  s4.2-v1. Backtest: next-close fills (signal on close t → fill at close t+1, no lookahead),
+  5 bps slippage (matches S1.5), walk-forward = contiguous out-of-sample windows over the
+  user's FIXED params (no fitting — windows show consistency; caveat says exactly that);
+  small-sample caveat under 10 closed trades; break-even counts as loss. Tables `strategies` +
+  `strategy_backtests` (migration 0006, RLS'd). Candidates ref `user_strategy:<id>`, go FIRST
+  in the candidate list (user's own rules outrank generic watchlist signals under the ≤3 cap);
+  strategy exits close the whole position; buys suppressed while paused/drawdown (S2.1 rule).
+  Activation gated on ≥1 backtest; ≤5 active strategies; drafted/backtested/activated/archived
+  all journaled. UI: StrategyLab at /strategies, linked from the Agent screen.
+
+## `[x]` S4.3 — Scenario / what-if simulator
+- **Depends on:** S1.3, S1.7 — **Acceptance:** [x] shock scenarios (per-class ±%, per-symbol
+  overrides, bounds −95..+100) show before/after equity, per-position damage, allocation, and
+  whether the move would trip the drawdown auto-pause · [x] trade preview returns the REAL
+  `validate_order` verdict + post-trade shape without placing anything (parity by construction,
+  parity-tested against the order endpoint). · **Landed:** 2026-07-10 · dev branch.
+- **Notes:** `domain/scenario.py` pure; endpoints POST /whatif/shock + /whatif/trade
+  (read-only, no persistence, no journal — nothing happened). Cash is deliberately unshocked
+  (the cash-floor lesson). Pause-trip framing is conservative: scenario drop measured from
+  current equity as if at peak. UI: ScenarioPanel with presets on Portfolio; "Preview impact"
+  button in the OrderTicket.
+
+- `[ ]` S4.4 Richer sentiment/social ingestion + manipulation defenses (needs external data — unscoped)
+- `[ ]` S4.5 Goal-based planning · `[ ]` S4.6 Voice · `[ ]` S4.7 Tax-lot awareness (unscoped)
 
 # Phase 5 — Real-money mode (MAJOR, gated — do not start without counsel)
 - `[ ]` S5.1 KYC/AML + suitability · `[ ]` S5.2 Funding + broker/exchange adapters (same execution
@@ -571,7 +610,10 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
 - Current coverage: auth (register/login/logout/enumeration), shell (nav, paper badge, kill switch
   two-tap + veto while paused), portfolio+ticket (fill updates holdings, veto teaching note), agent
   (run → cards → L2 → L3 trace → approve executes → portfolio updated; dismiss), chat (streamed
-  educational answer + disclaimer). Phase 3 adds: onboarding (wizard gate, disabled submit,
+  educational answer + disclaimer). Phase 4 adds: strategy lab (draft → compiled rules shown
+  back → backtest gate → activate → agent suggests from the strategy, trace shows
+  user_strategy ref) and what-if (shock preset on a real position with auto-pause verdict;
+  trade preview blocked/allowed parity with the order path). Phase 3 adds: onboarding (wizard gate, disabled submit,
   conservative preset lands in Settings, no re-interview on re-login), beginner journey (digest on
   Home → unread bell → mark read; journal timeline of onboarding/dismissal/fill; honest review
   with benchmark+drawdown+disclaimers; settings edit with loosening warning + persistence; paused

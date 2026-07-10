@@ -25,6 +25,12 @@ export type Journal = Schemas["JournalOut"];
 export type JournalEntry = Schemas["JournalEntryOut"];
 export type Nudge = Schemas["NudgeOut"];
 export type Review = Schemas["ReviewOut"];
+export type Strategy = Schemas["StrategyOut"];
+export type Backtest = Schemas["BacktestOut"];
+export type ShockRequest = Schemas["ShockRequest"];
+export type ShockImpact = Schemas["ShockImpactOut"];
+export type TradePreviewRequest = Schemas["TradePreviewRequest"];
+export type TradePreview = Schemas["TradePreviewOut"];
 
 export class ApiError extends Error {
   constructor(
@@ -101,6 +107,23 @@ export const api = {
     request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
   journal: (limit = 50) => request<Journal>(`/journal?limit=${limit}`),
   review: (days = 90) => request<Review>(`/portfolio/review?days=${days}`),
+
+  // strategy lab (S4.2)
+  strategies: () => request<Strategy[]>("/strategies"),
+  draftStrategy: (text: string) =>
+    request<Strategy>("/strategies/draft", { method: "POST", body: JSON.stringify({ text }) }),
+  backtestStrategy: (id: string) =>
+    request<Backtest>(`/strategies/${id}/backtest`, { method: "POST" }),
+  activateStrategy: (id: string) =>
+    request<Strategy>(`/strategies/${id}/activate`, { method: "POST" }),
+  archiveStrategy: (id: string) =>
+    request<Strategy>(`/strategies/${id}/archive`, { method: "POST" }),
+
+  // what-if simulator (S4.3)
+  whatIfShock: (body: ShockRequest) =>
+    request<ShockImpact>("/whatif/shock", { method: "POST", body: JSON.stringify(body) }),
+  whatIfTrade: (body: TradePreviewRequest) =>
+    request<TradePreview>("/whatif/trade", { method: "POST", body: JSON.stringify(body) }),
 
   // agent + suggestions (S2.5/S2.6). Suggestion payloads follow the frozen S0.4 view-model.
   runAgent: () => request<AgentRunResult>("/agent/run", { method: "POST" }),

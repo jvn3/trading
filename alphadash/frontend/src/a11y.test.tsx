@@ -46,6 +46,7 @@ const BASE_ROUTES = {
     },
   }),
   "GET /suggestions": () => ({ body: { suggestions: [] } }),
+  "GET /strategies": () => ({ body: [] }),
   "GET /quotes/AAPL": () => ({
     body: {
       symbol: "AAPL",
@@ -69,6 +70,7 @@ const SCREENS: Array<{ route: string; ready: () => Promise<unknown> }> = [
   { route: "/learn", ready: () => screen.findByText("Glossary") },
   { route: "/settings", ready: () => screen.findByLabelText(/Max single position/) },
   { route: "/agent", ready: () => screen.findByText(/Not\s+investment advice/) },
+  { route: "/strategies", ready: () => screen.findByText(/No strategies yet/) },
 ];
 
 for (const { route, ready } of SCREENS) {
