@@ -37,6 +37,8 @@ from alphadash.db.models import (
     Position,
     RiskEvent,
     RiskEventType,
+    Strategy,
+    StrategyStatus,
     Suggestion,
     SuggestionStatus,
     User,
@@ -45,6 +47,7 @@ from alphadash.db.models import (
 )
 from alphadash.domain.risk import OrderIntent, validate_order
 from alphadash.domain.signals import (
+    MAX_CANDIDATES,
     CandidateAction,
     SignalInputs,
     WatchItem,
@@ -130,13 +133,16 @@ def _size_candidate(candidate: CandidateAction, state, limits, price: Decimal) -
     if price <= 0:
         return None
     if candidate.side is OrderSide.buy:
+        # user_strategy candidates carry their author-chosen size; size_buy still clamps it
+        # under every cap, so a 20% strategy on a 5%-per-trade account sizes to 5%.
+        target_pct = candidate.features.get("size_pct", DEFAULT_TARGET_PCT)
         result = size_buy(
             state,
             limits,
             candidate.symbol,
             candidate.asset_class,
             price,
-            target_pct=DEFAULT_TARGET_PCT,
+            target_pct=target_pct,
         )
         if result.qty <= 0:
             return None
@@ -154,6 +160,8 @@ def _size_candidate(candidate: CandidateAction, state, limits, price: Decimal) -
         if candidate.kind == "rebalance":
             excess_value = candidate.features.get("excess_pct", Decimal("0")) / 100 * state.equity
             qty = min(held.quantity, (excess_value / price).quantize(Decimal("0.00000001")))
+        elif candidate.kind == "user_strategy":  # a strategy exit closes the whole position
+            qty = held.quantity
         else:  # take_profit trims a fixed fraction
             qty = (held.quantity * TAKE_PROFIT_TRIM_FRACTION).quantize(Decimal("0.00000001"))
         if qty <= 0:
@@ -336,15 +344,43 @@ def _run_inner(
         p.symbol: p.avg_cost
         for p in session.scalars(select(Position).where(Position.account_id == account.id))
     }
+    # Closes cover watchlist momentum AND any active user strategies (S4.2)
+    from alphadash.services import strategy_author  # local import: avoids a module cycle
+
+    strategy_symbols = [
+        s
+        for s in session.scalars(
+            select(Strategy.params["symbol"].as_string()).where(
+                Strategy.user_id == user.id, Strategy.status == StrategyStatus.active
+            )
+        )
+        if s
+    ]
+    closes = _closes(bundle, sorted({*(w.symbol for w in watchlist), *strategy_symbols}), now)
+
     candidates = generate_candidates(
         SignalInputs(
             state=state,
             limits=limits,
-            closes=_closes(bundle, [w.symbol for w in watchlist], now),
+            closes=closes,
             watchlist=watchlist,
             avg_costs=avg_costs,
         )
     )
+    # S4.2: active user strategies contribute candidates through the same pipeline —
+    # same sizing, same LLM narration, same risk gate, same human approval. They go FIRST:
+    # the user's own rules outrank generic watchlist signals when the ≤3-suggestion cap bites.
+    candidates = (
+        strategy_author.strategy_candidates(
+            session,
+            user=user,
+            state=state,
+            limits=limits,
+            closes_by_symbol=closes,
+            avg_costs=avg_costs,
+        )
+        + candidates
+    )[:MAX_CANDIDATES]
     if not candidates:
         return AgentRunResult(run=run, suggestions=[])
 

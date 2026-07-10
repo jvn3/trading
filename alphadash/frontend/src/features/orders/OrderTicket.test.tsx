@@ -72,3 +72,64 @@ test("risk veto renders as a teaching note with each violation", async () => {
   expect(note).toHaveTextContent("your safety rules stepped in");
   expect(note).toHaveTextContent("limit is 5% per trade");
 });
+
+// S4.3: trade preview — risk verdict + post-trade shape without placing anything.
+test("preview impact shows the allowed post-trade shape without placing an order", async () => {
+  const user = userEvent.setup();
+  const calls = mockApi({
+    "GET /quotes/AAPL": () => ({ body: QUOTE }),
+    "POST /whatif/trade": () => ({
+      body: {
+        allowed: true,
+        violations: [],
+        est_price: "210.50",
+        cash_after: "9789.50",
+        position_value_after: "210.50",
+        position_allocation_after_pct: 2.11,
+        cash_allocation_after_pct: 97.9,
+      },
+    }),
+  });
+  renderWithProviders(<OrderTicket />);
+
+  await screen.findByText("$210.50");
+  await user.click(screen.getByRole("button", { name: "Preview impact" }));
+
+  const note = await screen.findByRole("note", { name: "Trade preview" });
+  expect(note).toHaveTextContent("would pass your safety rules");
+  expect(note).toHaveTextContent("$9,789.50");
+  expect(note).toHaveTextContent("2.11% of portfolio");
+  expect(note).toHaveTextContent("Nothing has been placed");
+  expect(calls.some((c) => c.key === "POST /orders")).toBe(false); // preview places nothing
+});
+
+test("preview impact lists violations when the trade would be blocked", async () => {
+  const user = userEvent.setup();
+  mockApi({
+    "GET /quotes/AAPL": () => ({ body: QUOTE }),
+    "POST /whatif/trade": () => ({
+      body: {
+        allowed: false,
+        violations: [
+          {
+            limit_type: "per_suggestion_max_pct",
+            message: "order is 21.05% of equity, limit is 5% per trade",
+          },
+        ],
+        est_price: "210.50",
+        cash_after: "7895.00",
+        position_value_after: "2105.00",
+        position_allocation_after_pct: 21.05,
+        cash_allocation_after_pct: 78.95,
+      },
+    }),
+  });
+  renderWithProviders(<OrderTicket />);
+
+  await screen.findByText("$210.50");
+  await user.click(screen.getByRole("button", { name: "Preview impact" }));
+
+  const note = await screen.findByRole("note", { name: "Trade preview" });
+  expect(note).toHaveTextContent("would block this trade");
+  expect(note).toHaveTextContent("limit is 5% per trade");
+});

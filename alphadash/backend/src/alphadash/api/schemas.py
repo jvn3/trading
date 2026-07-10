@@ -174,6 +174,92 @@ class JournalOut(BaseModel):
     nudges: list[NudgeOut]
 
 
+# --- S4.2 strategy lab ---
+
+
+class StrategyDraftRequest(BaseModel):
+    text: str = Field(min_length=5, max_length=1000)
+
+
+class StrategyOut(BaseModel):
+    id: str
+    name: str
+    source_text: str
+    status: str
+    params: dict
+    description: str  # plain-language compilation of the rules (faithfulness)
+    created_at: str
+    last_backtest: dict | None = None  # results JSON of the most recent backtest
+
+
+class BacktestWindowOut(BaseModel):
+    start: str
+    end: str
+    strategy_return_pct: float
+    buy_hold_return_pct: float
+    trades: int
+
+
+class BacktestOut(BaseModel):
+    strategy_id: str
+    windows: list[BacktestWindowOut]
+    total_return_pct: float
+    buy_hold_return_pct: float
+    benchmark_return_pct: float
+    max_drawdown_pct: float
+    closed_trades: int
+    win_rate_pct: float | None
+    windows_beating_buy_hold: int
+    small_sample: bool
+    days: int
+    caveats: list[str]
+
+
+# --- S4.3 what-if simulator ---
+
+
+class ShockRequest(BaseModel):
+    equity_pct: str = "0"  # Decimal strings; -20 means "falls 20%"
+    crypto_pct: str = "0"
+    symbol_overrides: dict[str, str] = Field(default_factory=dict)
+
+
+class PositionImpactOut(BaseModel):
+    symbol: str
+    asset_class: str
+    value_before: str
+    value_after: str
+    applied_pct: str
+
+
+class ShockImpactOut(BaseModel):
+    equity_before: str
+    equity_after: str
+    equity_change_pct: str
+    cash: str
+    positions: list[PositionImpactOut]
+    allocation_after_pct: dict[str, float]
+    would_trip_drawdown_pause: bool
+    drawdown_pause_pct: str | None
+
+
+class TradePreviewRequest(BaseModel):
+    symbol: str = Field(min_length=1, max_length=32)
+    asset_class: str = Field(pattern="^(equity|crypto)$")
+    side: str = Field(pattern="^(buy|sell)$")
+    qty: str  # Decimal string
+
+
+class TradePreviewOut(BaseModel):
+    allowed: bool
+    violations: list[ViolationOut]
+    est_price: str
+    cash_after: str
+    position_value_after: str
+    position_allocation_after_pct: float
+    cash_allocation_after_pct: float
+
+
 class ClosedTradesOut(BaseModel):
     closed_trades: int
     wins: int

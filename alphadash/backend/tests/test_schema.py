@@ -17,6 +17,8 @@ EXPECTED_TABLES = {
     "auth_sessions",  # S1.8 schema extension
     "evidence_docs",  # S2.2 schema extension
     "notifications",  # S3.2 schema extension
+    "strategies",  # S4.2 schema extension
+    "strategy_backtests",  # S4.2 schema extension
     "users",
     "risk_profiles",
     "accounts",

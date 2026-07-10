@@ -7,6 +7,7 @@ import { Term } from "../../ui/Term";
 import { color, font, space } from "../../ui/tokens";
 import { OrderTicket } from "../orders/OrderTicket";
 import { ReviewCard } from "./ReviewCard";
+import { ScenarioPanel } from "./ScenarioPanel";
 
 // S1.11 portfolio screen: holdings, allocation, and performance — always framed against the
 // benchmark and with drawdown visible (honest-performance rule).
@@ -144,6 +145,8 @@ export function PortfolioScreen() {
       )}
 
       <OrderTicket />
+
+      <ScenarioPanel />
 
       <p style={{ margin: 0, color: color.textMuted, fontSize: font.sizeSm }}>
         Paper account — simulated fills with modeled slippage. Performance always shown against{" "}

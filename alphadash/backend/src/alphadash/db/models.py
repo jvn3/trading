@@ -119,6 +119,12 @@ class NotificationKind(enum.StrEnum):
     risk = "risk"
 
 
+class StrategyStatus(enum.StrEnum):
+    draft = "draft"
+    active = "active"
+    archived = "archived"
+
+
 class AgentRunTrigger(enum.StrEnum):
     scheduled = "scheduled"
     event = "event"
@@ -385,6 +391,45 @@ class Notification(PkMixin, CreatedAtMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# User-authored strategies (S4.2 schema extension)
+# ---------------------------------------------------------------------------
+
+
+class Strategy(PkMixin, CreatedAtMixin, UpdatedAtMixin, Base):
+    """A user-authored simple strategy (S4.2).
+
+    ``params`` holds the frozen deterministic rule document (domain/strategy_rules.py schema)
+    — the LLM only ever AUTHORS this document; execution/evaluation is pure code, and every
+    resulting trade still passes the S1.3 risk gate. ``source_text`` preserves the user's
+    natural-language intent for the audit trail.
+    """
+
+    __tablename__ = "strategies"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[StrategyStatus] = mapped_column(
+        _enum(StrategyStatus, "strategy_status"), nullable=False, default=StrategyStatus.draft
+    )
+    prompt_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class StrategyBacktest(PkMixin, CreatedAtMixin, Base):
+    """Persisted walk-forward backtest run (S4.2) — the audit trail behind 'Activate'."""
+
+    __tablename__ = "strategy_backtests"
+
+    strategy_id: Mapped[str] = mapped_column(
+        ForeignKey("strategies.id", ondelete="CASCADE"), nullable=False
+    )
+    params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)  # rules as backtested
+    results: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
 # ---------------------------------------------------------------------------

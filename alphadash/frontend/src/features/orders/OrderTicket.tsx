@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { api, ApiError, type OrderResult } from "../../lib/api";
+import { api, ApiError, type OrderResult, type TradePreview } from "../../lib/api";
 import { money } from "../../lib/format";
 import { ActionButton } from "../../ui/ActionButton";
 import { Card } from "../../ui/Card";
@@ -39,6 +39,14 @@ export function OrderTicket() {
   const [limitPrice, setLimitPrice] = useState("");
   const [idemKey, setIdemKey] = useState(newIdempotencyKey);
   const [result, setResult] = useState<OrderResult | null>(null);
+  const [preview, setPreview] = useState<TradePreview | null>(null);
+
+  // S4.3: check the trade against the risk gate + see the post-trade shape WITHOUT placing it.
+  const previewTrade = useMutation({
+    mutationFn: () =>
+      api.whatIfTrade({ symbol, asset_class: assetClass, side, qty: qtyInput }),
+    onSuccess: setPreview,
+  });
 
   const quote = useQuery({
     queryKey: ["quote", symbol],
@@ -168,7 +176,13 @@ export function OrderTicket() {
           )}
         </div>
 
-        <div>
+        <div style={{ display: "flex", gap: space.sm, flexWrap: "wrap" }}>
+          <ActionButton
+            label={previewTrade.isPending ? "Checking…" : "Preview impact"}
+            intent="secondary"
+            disabled={previewTrade.isPending || Number(qtyInput) <= 0}
+            onClick={() => previewTrade.mutate()}
+          />
           <ActionButton
             label={place.isPending ? "Placing…" : `${side === "buy" ? "Buy" : "Sell"} ${symbol}`}
             intent="primary"
@@ -177,6 +191,39 @@ export function OrderTicket() {
             onClick={() => place.mutate()}
           />
         </div>
+
+        {preview && (
+          <aside
+            role="note"
+            aria-label="Trade preview"
+            style={{
+              background: preview.allowed ? color.info : color.caution,
+              color: preview.allowed ? color.infoText : color.cautionText,
+              borderRadius: radius.md,
+              padding: space.md,
+              fontSize: font.sizeSm,
+            }}
+          >
+            {preview.allowed ? (
+              <>
+                This trade would pass your safety rules. Afterwards: cash{" "}
+                {money(preview.cash_after)} ({preview.cash_allocation_after_pct.toFixed(2)}%),{" "}
+                {symbol} position {money(preview.position_value_after)} (
+                {preview.position_allocation_after_pct.toFixed(2)}% of portfolio). Nothing has
+                been placed.
+              </>
+            ) : (
+              <>
+                <strong>Your safety rules would block this trade:</strong>
+                <ul style={{ margin: `${space.xs}px 0 0`, paddingLeft: space.lg }}>
+                  {preview.violations.map((v, i) => (
+                    <li key={i}>{v.message}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </aside>
+        )}
 
         {placeError && (
           <p role="alert" style={{ margin: 0, color: color.danger, fontSize: font.sizeSm }}>

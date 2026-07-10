@@ -1521,6 +1521,410 @@
     }
    }
   },
+  "/strategies": {
+   "get": {
+    "tags": [
+     "strategies"
+    ],
+    "summary": "List Strategies",
+    "operationId": "list_strategies_strategies_get",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/StrategyOut"
+         },
+         "title": "Response List Strategies Strategies Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/strategies/draft": {
+   "post": {
+    "tags": [
+     "strategies"
+    ],
+    "summary": "Draft",
+    "operationId": "draft_strategies_draft_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StrategyDraftRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "201": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StrategyOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/strategies/{strategy_id}/backtest": {
+   "post": {
+    "tags": [
+     "strategies"
+    ],
+    "summary": "Backtest",
+    "operationId": "backtest_strategies__strategy_id__backtest_post",
+    "parameters": [
+     {
+      "name": "strategy_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Strategy Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BacktestOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/strategies/{strategy_id}/activate": {
+   "post": {
+    "tags": [
+     "strategies"
+    ],
+    "summary": "Activate",
+    "operationId": "activate_strategies__strategy_id__activate_post",
+    "parameters": [
+     {
+      "name": "strategy_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Strategy Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StrategyOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/strategies/{strategy_id}/archive": {
+   "post": {
+    "tags": [
+     "strategies"
+    ],
+    "summary": "Archive",
+    "operationId": "archive_strategies__strategy_id__archive_post",
+    "parameters": [
+     {
+      "name": "strategy_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Strategy Id"
+      }
+     },
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StrategyOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/whatif/shock": {
+   "post": {
+    "tags": [
+     "whatif"
+    ],
+    "summary": "Shock",
+    "operationId": "shock_whatif_shock_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ShockRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ShockImpactOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/whatif/trade": {
+   "post": {
+    "tags": [
+     "whatif"
+    ],
+    "summary": "Trade Preview",
+    "operationId": "trade_preview_whatif_trade_post",
+    "parameters": [
+     {
+      "name": "alphadash_session",
+      "in": "cookie",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Alphadash Session"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TradePreviewRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TradePreviewOut"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/health": {
    "get": {
     "tags": [
@@ -1609,6 +2013,120 @@
      "suggestions"
     ],
     "title": "AgentRunOut"
+   },
+   "BacktestOut": {
+    "properties": {
+     "strategy_id": {
+      "type": "string",
+      "title": "Strategy Id"
+     },
+     "windows": {
+      "items": {
+       "$ref": "#/components/schemas/BacktestWindowOut"
+      },
+      "type": "array",
+      "title": "Windows"
+     },
+     "total_return_pct": {
+      "type": "number",
+      "title": "Total Return Pct"
+     },
+     "buy_hold_return_pct": {
+      "type": "number",
+      "title": "Buy Hold Return Pct"
+     },
+     "benchmark_return_pct": {
+      "type": "number",
+      "title": "Benchmark Return Pct"
+     },
+     "max_drawdown_pct": {
+      "type": "number",
+      "title": "Max Drawdown Pct"
+     },
+     "closed_trades": {
+      "type": "integer",
+      "title": "Closed Trades"
+     },
+     "win_rate_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Win Rate Pct"
+     },
+     "windows_beating_buy_hold": {
+      "type": "integer",
+      "title": "Windows Beating Buy Hold"
+     },
+     "small_sample": {
+      "type": "boolean",
+      "title": "Small Sample"
+     },
+     "days": {
+      "type": "integer",
+      "title": "Days"
+     },
+     "caveats": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Caveats"
+     }
+    },
+    "type": "object",
+    "required": [
+     "strategy_id",
+     "windows",
+     "total_return_pct",
+     "buy_hold_return_pct",
+     "benchmark_return_pct",
+     "max_drawdown_pct",
+     "closed_trades",
+     "win_rate_pct",
+     "windows_beating_buy_hold",
+     "small_sample",
+     "days",
+     "caveats"
+    ],
+    "title": "BacktestOut"
+   },
+   "BacktestWindowOut": {
+    "properties": {
+     "start": {
+      "type": "string",
+      "title": "Start"
+     },
+     "end": {
+      "type": "string",
+      "title": "End"
+     },
+     "strategy_return_pct": {
+      "type": "number",
+      "title": "Strategy Return Pct"
+     },
+     "buy_hold_return_pct": {
+      "type": "number",
+      "title": "Buy Hold Return Pct"
+     },
+     "trades": {
+      "type": "integer",
+      "title": "Trades"
+     }
+    },
+    "type": "object",
+    "required": [
+     "start",
+     "end",
+     "strategy_return_pct",
+     "buy_hold_return_pct",
+     "trades"
+    ],
+    "title": "BacktestWindowOut"
    },
    "ChatMessage": {
     "properties": {
@@ -2482,6 +3000,39 @@
     ],
     "title": "PortfolioOut"
    },
+   "PositionImpactOut": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "title": "Symbol"
+     },
+     "asset_class": {
+      "type": "string",
+      "title": "Asset Class"
+     },
+     "value_before": {
+      "type": "string",
+      "title": "Value Before"
+     },
+     "value_after": {
+      "type": "string",
+      "title": "Value After"
+     },
+     "applied_pct": {
+      "type": "string",
+      "title": "Applied Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "symbol",
+     "asset_class",
+     "value_before",
+     "value_after",
+     "applied_pct"
+    ],
+    "title": "PositionImpactOut"
+   },
    "PositionOut": {
     "properties": {
      "symbol": {
@@ -2614,6 +3165,161 @@
     ],
     "title": "ReviewOut"
    },
+   "ShockImpactOut": {
+    "properties": {
+     "equity_before": {
+      "type": "string",
+      "title": "Equity Before"
+     },
+     "equity_after": {
+      "type": "string",
+      "title": "Equity After"
+     },
+     "equity_change_pct": {
+      "type": "string",
+      "title": "Equity Change Pct"
+     },
+     "cash": {
+      "type": "string",
+      "title": "Cash"
+     },
+     "positions": {
+      "items": {
+       "$ref": "#/components/schemas/PositionImpactOut"
+      },
+      "type": "array",
+      "title": "Positions"
+     },
+     "allocation_after_pct": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "type": "object",
+      "title": "Allocation After Pct"
+     },
+     "would_trip_drawdown_pause": {
+      "type": "boolean",
+      "title": "Would Trip Drawdown Pause"
+     },
+     "drawdown_pause_pct": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Drawdown Pause Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "equity_before",
+     "equity_after",
+     "equity_change_pct",
+     "cash",
+     "positions",
+     "allocation_after_pct",
+     "would_trip_drawdown_pause",
+     "drawdown_pause_pct"
+    ],
+    "title": "ShockImpactOut"
+   },
+   "ShockRequest": {
+    "properties": {
+     "equity_pct": {
+      "type": "string",
+      "title": "Equity Pct",
+      "default": "0"
+     },
+     "crypto_pct": {
+      "type": "string",
+      "title": "Crypto Pct",
+      "default": "0"
+     },
+     "symbol_overrides": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Symbol Overrides"
+     }
+    },
+    "type": "object",
+    "title": "ShockRequest"
+   },
+   "StrategyDraftRequest": {
+    "properties": {
+     "text": {
+      "type": "string",
+      "maxLength": 1000,
+      "minLength": 5,
+      "title": "Text"
+     }
+    },
+    "type": "object",
+    "required": [
+     "text"
+    ],
+    "title": "StrategyDraftRequest"
+   },
+   "StrategyOut": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "source_text": {
+      "type": "string",
+      "title": "Source Text"
+     },
+     "status": {
+      "type": "string",
+      "title": "Status"
+     },
+     "params": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Params"
+     },
+     "description": {
+      "type": "string",
+      "title": "Description"
+     },
+     "created_at": {
+      "type": "string",
+      "title": "Created At"
+     },
+     "last_backtest": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Backtest"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "name",
+     "source_text",
+     "status",
+     "params",
+     "description",
+     "created_at"
+    ],
+    "title": "StrategyOut"
+   },
    "SuggestionListOut": {
     "properties": {
      "suggestions": {
@@ -2728,6 +3434,84 @@
     ],
     "title": "TraceOut",
     "description": "S2.6 \u2014 the full 'show your work' trail: candidate logic \u2192 source data \u2192 model metadata."
+   },
+   "TradePreviewOut": {
+    "properties": {
+     "allowed": {
+      "type": "boolean",
+      "title": "Allowed"
+     },
+     "violations": {
+      "items": {
+       "$ref": "#/components/schemas/ViolationOut"
+      },
+      "type": "array",
+      "title": "Violations"
+     },
+     "est_price": {
+      "type": "string",
+      "title": "Est Price"
+     },
+     "cash_after": {
+      "type": "string",
+      "title": "Cash After"
+     },
+     "position_value_after": {
+      "type": "string",
+      "title": "Position Value After"
+     },
+     "position_allocation_after_pct": {
+      "type": "number",
+      "title": "Position Allocation After Pct"
+     },
+     "cash_allocation_after_pct": {
+      "type": "number",
+      "title": "Cash Allocation After Pct"
+     }
+    },
+    "type": "object",
+    "required": [
+     "allowed",
+     "violations",
+     "est_price",
+     "cash_after",
+     "position_value_after",
+     "position_allocation_after_pct",
+     "cash_allocation_after_pct"
+    ],
+    "title": "TradePreviewOut"
+   },
+   "TradePreviewRequest": {
+    "properties": {
+     "symbol": {
+      "type": "string",
+      "maxLength": 32,
+      "minLength": 1,
+      "title": "Symbol"
+     },
+     "asset_class": {
+      "type": "string",
+      "pattern": "^(equity|crypto)$",
+      "title": "Asset Class"
+     },
+     "side": {
+      "type": "string",
+      "pattern": "^(buy|sell)$",
+      "title": "Side"
+     },
+     "qty": {
+      "type": "string",
+      "title": "Qty"
+     }
+    },
+    "type": "object",
+    "required": [
+     "symbol",
+     "asset_class",
+     "side",
+     "qty"
+    ],
+    "title": "TradePreviewRequest"
    },
    "ValidationError": {
     "properties": {
