@@ -33,7 +33,7 @@ Companion to the blueprint: [docs/product/beginner_agent_product_blueprint.md](.
 | 0 | Foundations | S0.1–S0.4 | 4 / 4 |
 | 1 | Safety & data spine (no AI) | S1.1–S1.12 | 12 / 12 |
 | 2 | The agent | S2.1–S2.9 | 9 / 9 |
-| 3 | Beginner experience | S3.1–S3.7 | 0 / 7 |
+| 3 | Beginner experience | S3.1–S3.7 | 7 / 7 |
 | 4 | Trust-earning extensions | S4.x | not scoped |
 | 5 | Real-money mode (gated) | S5.x | not scoped |
 
@@ -486,33 +486,65 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
 
 # Phase 3 — Beginner experience
 
-## `[ ]` S3.1 — Guided onboarding + risk/goals interview
-- **Depends on:** S1.8, S1.3 — **Acceptance:** [ ] new user → starter profile + funded paper account,
-  reaches first explained read <5 min. · **Landed:** —
+## `[x]` S3.1 — Guided onboarding + risk/goals interview
+- **Depends on:** S1.8, S1.3 — **Acceptance:** [x] new user → starter profile + funded paper account,
+  reaches first explained read <5 min. · **Landed:** 2026-07-09 · dev branch · wizard + presets + digest on Home.
+- **Notes:** 3-question interview (experience / drop reaction / goal) → additive score 0–6 →
+  conservative (≤1) / balanced (2–4) / curious (≥5); presets in `services/onboarding.py`,
+  applied to the registration-provisioned profile in place. `users.onboarded_at` (migration
+  0005) gates the app shell; `/auth/me` exposes `onboarded`. Journaled as a `note`. e2e helpers'
+  `register()` now walks the wizard with balanced answers so all Phase-2 specs keep their limits.
 
-## `[ ]` S3.2 — Daily/weekly digest + notifications
-- **Depends on:** S2.4 — **Acceptance:** [ ] scheduled digest (today's read + what changed + 0–3
-  suggestions) · [ ] push/email. · **Landed:** —
+## `[x]` S3.2 — Daily/weekly digest + notifications
+- **Depends on:** S2.4 — **Acceptance:** [x] scheduled digest (today's read + what changed + 0–3
+  suggestions) · [x] push/email (in-app feed + delivery stub — see note). · **Landed:** 2026-07-09 · dev branch.
+- **Notes:** `notifications` table (migration 0005, RLS'd) + `services/{digest,notify}.py`.
+  `POST /digest/run` is idempotent per user per UTC day — a cron and the UI's Home-mount fetch
+  share it (no scheduler process yet; wire cron in deploy when wanted). Digest payload is
+  structured data with provenance; equity/cash from portfolio snapshot. **Push/email delivery is
+  a `LogNotifier` stub** (no SMTP/push credentials this phase) — the `Notifier` protocol is the
+  swap point. Bell in the shell header shows unread count; tap marks read.
 
-## `[ ]` S3.3 — Contextual education (definitions + explainers)
-- **Depends on:** S0.4 — **Acceptance:** [ ] first-use glossary terms tappable via `DefinitionTooltip`.
-  · **Landed:** —
+## `[x]` S3.3 — Contextual education (definitions + explainers)
+- **Depends on:** S0.4 — **Acceptance:** [x] first-use glossary terms tappable via `DefinitionTooltip`.
+  · **Landed:** 2026-07-09 · dev branch · `lib/glossary.ts` + `ui/Term.tsx`.
+- **Notes:** 13-term plain-English glossary, single source of truth; `<Term k=...>` is
+  type-checked against it (missing term = compile error). Wired into Home, Portfolio (allocation,
+  unrealized P/L, drawdown, benchmark, win rate), OrderTicket (market/limit), onboarding result,
+  Settings; Learn renders the full glossary.
 
-## `[ ]` S3.4 — Decision journal + behavioral feedback
-- **Depends on:** S1.6 — **Acceptance:** [ ] decisions/outcomes shown · [ ] overtrading/loss-chasing
-  nudge fires. · **Landed:** —
+## `[x]` S3.4 — Decision journal + behavioral feedback
+- **Depends on:** S1.6 — **Acceptance:** [x] decisions/outcomes shown · [x] overtrading/loss-chasing
+  nudge fires. · **Landed:** 2026-07-09 · dev branch · `services/behavior.py` + `GET /journal` + Journal tab.
+- **Notes:** Journal screen renders the S1.6 append-only trail as a human timeline. Nudges are
+  deterministic and computed fresh per read: overtrading (≥80% of weekly cap = info, at cap =
+  warn; fills since Monday) and loss-chasing (buy within 48h after a sell that realized a loss
+  against replayed avg cost; stale patterns >96h old are not re-nagged). Nudges teach, never block.
 
-## `[ ]` S3.5 — Honest performance review
-- **Depends on:** S1.7 — **Acceptance:** [ ] benchmark + drawdown framing · [ ] no naked returns · [ ]
-  disclaimers present. · **Landed:** —
+## `[x]` S3.5 — Honest performance review
+- **Depends on:** S1.7 — **Acceptance:** [x] benchmark + drawdown framing · [x] no naked returns · [x]
+  disclaimers present. · **Landed:** 2026-07-09 · dev branch · `services/review.py` + `GET /portfolio/review` + ReviewCard.
+- **Notes:** Verdict is always benchmark-relative; win rate from fill replay (break-even counts
+  as a loss); `small_sample` caveat under 10 closed trades; disclaimers ship in the API payload
+  so the framing is server-enforced. ReviewCard on the Portfolio screen.
 
-## `[ ]` S3.6 — Settings + kill switch + pause-all
-- **Depends on:** S1.3 — **Acceptance:** [ ] one-tap pause halts automation (verified) · [ ] limits
-  editable + persistently displayed. · **Landed:** —
+## `[x]` S3.6 — Settings + kill switch + pause-all
+- **Depends on:** S1.3 — **Acceptance:** [x] one-tap pause halts automation (verified: paused agent
+  run emits no buys, buy order vetoed, both API- and e2e-tested) · [x] limits editable +
+  persistently displayed. · **Landed:** 2026-07-09 · dev branch · `PUT /account/limits` + Settings screen.
+- **Notes:** Full-replace update with bounds validation (0–100%, exact {equity,crypto} keys,
+  0–100 trades/week); any edit makes the profile `custom`; every change journaled with a
+  `loosened` field list, and the UI shows a loosening warning. Kill switch stays in the header
+  (S1.10); Settings explains it.
 
-## `[ ]` S3.7 — Accessibility + empty/loading states + microcopy pass
-- **Depends on:** all Phase 3 FE — **Acceptance:** [ ] axe passes app-wide · [ ] states teach, not
-  spin · [ ] "simulated/paper/not advice" copy where it matters. · **Landed:** —
+## `[x]` S3.7 — Accessibility + empty/loading states + microcopy pass
+- **Depends on:** all Phase 3 FE — **Acceptance:** [x] axe passes app-wide (`a11y.test.tsx`: every
+  screen + wizard; color-contrast still browser-pass-only under jsdom) · [x] states teach, not
+  spin · [x] "simulated/paper/not advice" copy where it matters. · **Landed:** 2026-07-09 · dev branch.
+- **Notes:** Axe caught a real Phase-2 bug: ChatPanel's live region had `aria-label` on a
+  role-less div → now `role="log"`. The S1.9 trailing-zeros cosmetic is fixed at the source:
+  `format_decimal` normalizes limits in `GET /account/limits` and all risk-veto copy
+  (10.00000000 → 10). Digest/journal/suggestions/holdings all have teaching empty states.
 
 ---
 
@@ -539,8 +571,13 @@ _All monetary/quantity fields are strings (Decimal over the wire — never JS nu
 - Current coverage: auth (register/login/logout/enumeration), shell (nav, paper badge, kill switch
   two-tap + veto while paused), portfolio+ticket (fill updates holdings, veto teaching note), agent
   (run → cards → L2 → L3 trace → approve executes → portfolio updated; dismiss), chat (streamed
-  educational answer + disclaimer). e2e caught two real bugs vitest missed: fetch header-merge
-  dropping Content-Type (422 on orders) and logout not flipping the auth gate.
+  educational answer + disclaimer). Phase 3 adds: onboarding (wizard gate, disabled submit,
+  conservative preset lands in Settings, no re-interview on re-login), beginner journey (digest on
+  Home → unread bell → mark read; journal timeline of onboarding/dismissal/fill; honest review
+  with benchmark+drawdown+disclaimers; settings edit with loosening warning + persistence; paused
+  agent proposes no buys), glossary (Learn glossary + cross-screen tooltip). e2e caught two real
+  bugs vitest missed: fetch header-merge dropping Content-Type (422 on orders) and logout not
+  flipping the auth gate. `register()` helper completes onboarding with balanced answers.
 
 ## Appendix — conventions (apply to every session)
 - Python: `uv`, `ruff` (line-length 100), `pytest` (`integration` marker skipped in CI), pydantic v2,

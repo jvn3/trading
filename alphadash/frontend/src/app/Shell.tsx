@@ -5,15 +5,19 @@ import { api } from "../lib/api";
 import { ActionButton } from "../ui/ActionButton";
 import { Chip } from "../ui/Chip";
 import { color, font, space } from "../ui/tokens";
+import { NotificationsBell } from "./NotificationsBell";
 
 // S1.10 app shell: persistent safety header (paper badge + kill switch, blueprint §13.1) and
-// bottom navigation. Screens render into <Outlet/>.
+// bottom navigation. Screens render into <Outlet/>. S3.2 adds the notification bell; S3.4 the
+// Journal tab; S3.6 the Settings link.
 
 const NAV = [
   { to: "/", label: "Home", icon: "⌂" },
   { to: "/agent", label: "Agent", icon: "✦" },
   { to: "/portfolio", label: "Portfolio", icon: "▤" },
+  { to: "/journal", label: "Journal", icon: "☰" },
   { to: "/learn", label: "Learn", icon: "✎" },
+  { to: "/settings", label: "Settings", icon: "⚙" },
 ];
 
 export function Shell({ onLogout }: { onLogout: () => void }) {
@@ -55,6 +59,7 @@ export function Shell({ onLogout }: { onLogout: () => void }) {
         <Chip label="PAPER — simulated money" tone="info" icon="🛈" />
         {paused && <Chip label="Paused" tone="caution" icon="⏸" />}
         <span style={{ flex: 1 }} />
+        <NotificationsBell />
         <ActionButton
           label={paused ? "Resume" : "Pause all"}
           intent={paused ? "secondary" : "danger"}

@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { money, pct, qty } from "../../lib/format";
 import { Card } from "../../ui/Card";
+import { Term } from "../../ui/Term";
 import { color, font, space } from "../../ui/tokens";
 import { OrderTicket } from "../orders/OrderTicket";
+import { ReviewCard } from "./ReviewCard";
 
 // S1.11 portfolio screen: holdings, allocation, and performance — always framed against the
 // benchmark and with drawdown visible (honest-performance rule).
@@ -65,9 +67,13 @@ export function PortfolioScreen() {
         </Card>
       )}
 
+      <ReviewCard />
+
       {portfolio.data && (
         <Card>
-          <h3 style={{ margin: `0 0 ${space.md}px`, fontSize: font.sizeLg }}>Allocation</h3>
+          <h3 style={{ margin: `0 0 ${space.md}px`, fontSize: font.sizeLg }}>
+            <Term k="allocation">Allocation</Term>
+          </h3>
           <div style={{ display: "flex", gap: space.lg, flexWrap: "wrap" }}>
             {Object.entries(portfolio.data.allocation_pct).map(([bucket, share]) => (
               <Stat key={bucket} label={bucket} value={pct(share)} />
@@ -95,7 +101,9 @@ export function PortfolioScreen() {
                 <th style={th}>Qty</th>
                 <th style={th}>Avg cost</th>
                 <th style={th}>Value</th>
-                <th style={th}>Unrealized P/L</th>
+                <th style={th}>
+                  <Term k="unrealized P/L">Unrealized P/L</Term>
+                </th>
                 <th style={th}>% of portfolio</th>
               </tr>
             </thead>

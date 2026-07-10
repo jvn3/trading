@@ -27,6 +27,17 @@ from alphadash.db.models import AssetClass, OrderSide, RiskLimitType
 HUNDRED = Decimal("100")
 
 
+def format_decimal(value: Decimal) -> str:
+    """Human copy: strip Numeric(24,8) trailing zeros (10.00000000 → 10), never exponent form."""
+    normalized = value.normalize()
+    if normalized == normalized.to_integral_value():
+        normalized = normalized.quantize(Decimal("1"))
+    return format(normalized, "f")
+
+
+_fmt = format_decimal  # short alias for the message builders below
+
+
 @dataclass(frozen=True)
 class PositionState:
     symbol: str
@@ -96,11 +107,15 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
     # --- Structural invariants (not configurable, always enforced) ---
     if intent.qty <= 0:
         violations.append(
-            Violation(None, f"quantity must be positive, got {intent.qty}", intent.qty, Decimal(0))
+            Violation(
+                None, f"quantity must be positive, got {_fmt(intent.qty)}", intent.qty, Decimal(0)
+            )
         )
     if intent.price <= 0:
         violations.append(
-            Violation(None, f"price must be positive, got {intent.price}", intent.price, Decimal(0))
+            Violation(
+                None, f"price must be positive, got {_fmt(intent.price)}", intent.price, Decimal(0)
+            )
         )
     if violations:
         # Notional math below is meaningless with non-positive inputs — fail fast.
@@ -115,7 +130,7 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
             violations.append(
                 Violation(
                     None,
-                    f"cannot sell {intent.qty} {intent.symbol}: only {held_qty} held (no shorting)",
+                    f"cannot sell {_fmt(intent.qty)} {intent.symbol}: only {_fmt(held_qty)} held (no shorting)",
                     intent.qty,
                     held_qty,
                 )
@@ -125,7 +140,7 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
             violations.append(
                 Violation(
                     None,
-                    f"order needs {notional} but only {state.cash} cash available",
+                    f"order needs {_fmt(notional)} but only {_fmt(state.cash)} cash available",
                     notional,
                     state.cash,
                 )
@@ -162,8 +177,8 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
             violations.append(
                 Violation(
                     RiskLimitType.drawdown_pause_pct,
-                    f"drawdown {state.drawdown_pct}% ≥ pause threshold "
-                    f"{limits.drawdown_pause_pct}% — buys paused, sells still allowed",
+                    f"drawdown {_fmt(state.drawdown_pct)}% ≥ pause threshold "
+                    f"{_fmt(limits.drawdown_pause_pct)}% — buys paused, sells still allowed",
                     state.drawdown_pct,
                     limits.drawdown_pause_pct,
                 )
@@ -175,8 +190,8 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
                 violations.append(
                     Violation(
                         RiskLimitType.per_suggestion_max_pct,
-                        f"order is {observed.quantize(Decimal('0.01'))}% of equity, "
-                        f"limit is {limits.per_suggestion_max_pct}% per trade",
+                        f"order is {_fmt(observed.quantize(Decimal('0.01')))}% of equity, "
+                        f"limit is {_fmt(limits.per_suggestion_max_pct)}% per trade",
                         observed,
                         limits.per_suggestion_max_pct,
                     )
@@ -189,8 +204,8 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
                 violations.append(
                     Violation(
                         RiskLimitType.max_position_pct,
-                        f"{intent.symbol} would be {observed.quantize(Decimal('0.01'))}% of your "
-                        f"portfolio, limit is {limits.max_position_pct}%",
+                        f"{intent.symbol} would be {_fmt(observed.quantize(Decimal('0.01')))}% of your "
+                        f"portfolio, limit is {_fmt(limits.max_position_pct)}%",
                         observed,
                         limits.max_position_pct,
                     )
@@ -215,8 +230,8 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
                     Violation(
                         RiskLimitType.max_asset_class_pct,
                         f"{intent.asset_class.value} would be "
-                        f"{observed.quantize(Decimal('0.01'))}% of your portfolio, "
-                        f"limit is {class_cap}%",
+                        f"{_fmt(observed.quantize(Decimal('0.01')))}% of your portfolio, "
+                        f"limit is {_fmt(class_cap)}%",
                         observed,
                         class_cap,
                     )
@@ -229,8 +244,8 @@ def validate_order(intent: OrderIntent, state: AccountState, limits: RiskLimitSe
                 violations.append(
                     Violation(
                         RiskLimitType.cash_floor_pct,
-                        f"cash would fall to {observed.quantize(Decimal('0.01'))}% of equity, "
-                        f"your floor is {limits.cash_floor_pct}%",
+                        f"cash would fall to {_fmt(observed.quantize(Decimal('0.01')))}% of equity, "
+                        f"your floor is {_fmt(limits.cash_floor_pct)}%",
                         observed,
                         limits.cash_floor_pct,
                     )

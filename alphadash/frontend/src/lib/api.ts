@@ -14,6 +14,17 @@ export type OrderOut = Schemas["OrderOut"];
 export type OrderResult = Schemas["OrderResult"];
 export type OrderRequest = Schemas["OrderRequest"];
 export type Quote = Schemas["QuoteOut"];
+export type OnboardingStatus = Schemas["OnboardingStatusOut"];
+export type OnboardingRequest = Schemas["OnboardingRequest"];
+export type OnboardingResult = Schemas["OnboardingOut"];
+export type LimitsUpdateRequest = Schemas["LimitsUpdateRequest"];
+export type LimitsUpdateResult = Schemas["LimitsUpdateOut"];
+export type Notification = Schemas["NotificationOut"];
+export type Digest = Schemas["DigestOut"];
+export type Journal = Schemas["JournalOut"];
+export type JournalEntry = Schemas["JournalEntryOut"];
+export type Nudge = Schemas["NudgeOut"];
+export type Review = Schemas["ReviewOut"];
 
 export class ApiError extends Error {
   constructor(
@@ -76,6 +87,20 @@ export const api = {
     }),
 
   quote: (symbol: string) => request<Quote>(`/quotes/${encodeURIComponent(symbol)}`),
+
+  // beginner experience (S3.x)
+  onboardingStatus: () => request<OnboardingStatus>("/onboarding"),
+  completeOnboarding: (body: OnboardingRequest) =>
+    request<OnboardingResult>("/onboarding", { method: "POST", body: JSON.stringify(body) }),
+  updateLimits: (body: LimitsUpdateRequest) =>
+    request<LimitsUpdateResult>("/account/limits", { method: "PUT", body: JSON.stringify(body) }),
+  runDigest: () => request<Digest>("/digest/run", { method: "POST" }),
+  notifications: (unreadOnly = false) =>
+    request<Notification[]>(`/notifications?unread_only=${unreadOnly}`),
+  markNotificationRead: (id: string) =>
+    request<Notification>(`/notifications/${id}/read`, { method: "POST" }),
+  journal: (limit = 50) => request<Journal>(`/journal?limit=${limit}`),
+  review: (days = 90) => request<Review>(`/portfolio/review?days=${days}`),
 
   // agent + suggestions (S2.5/S2.6). Suggestion payloads follow the frozen S0.4 view-model.
   runAgent: () => request<AgentRunResult>("/agent/run", { method: "POST" }),

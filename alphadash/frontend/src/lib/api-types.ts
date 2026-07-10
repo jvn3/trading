@@ -98,7 +98,8 @@ export interface paths {
         };
         /** Account Limits */
         get: operations["account_limits_account_limits_get"];
-        put?: never;
+        /** Update Account Limits */
+        put: operations["update_account_limits_account_limits_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -166,6 +167,26 @@ export interface paths {
         };
         /** Performance */
         get: operations["performance_portfolio_performance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portfolio/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Performance Review
+         * @description S3.5 honest review: return is never served without benchmark + drawdown beside it.
+         */
+        get: operations["performance_review_portfolio_review_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -328,6 +349,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Onboarding Status */
+        get: operations["onboarding_status_onboarding_get"];
+        put?: never;
+        /** Complete Onboarding */
+        post: operations["complete_onboarding_onboarding_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/digest/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Digest */
+        post: operations["run_digest_digest_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notifications */
+        get: operations["list_notifications_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Read */
+        post: operations["mark_read_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Journal */
+        get: operations["read_journal_journal_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -389,6 +496,19 @@ export interface components {
             /** History */
             history?: components["schemas"]["ChatMessage"][];
         };
+        /** ClosedTradesOut */
+        ClosedTradesOut: {
+            /** Closed Trades */
+            closed_trades: number;
+            /** Wins */
+            wins: number;
+            /** Losses */
+            losses: number;
+            /** Win Rate Pct */
+            win_rate_pct: number | null;
+            /** Small Sample */
+            small_sample: boolean;
+        };
         /** DecisionRequest */
         DecisionRequest: {
             /** Reason */
@@ -408,6 +528,12 @@ export interface components {
              * @default []
              */
             violations: components["schemas"]["ViolationOut"][];
+        };
+        /** DigestOut */
+        DigestOut: {
+            notification: components["schemas"]["NotificationOut"];
+            /** Created */
+            created: boolean;
         };
         /** FillOut */
         FillOut: {
@@ -437,6 +563,28 @@ export interface components {
             /** Trading Mode */
             trading_mode: string;
         };
+        /** JournalEntryOut */
+        JournalEntryOut: {
+            /** Id */
+            id: string;
+            /** Entry Type */
+            entry_type: string;
+            /** Ref Id */
+            ref_id: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Created At */
+            created_at: string;
+        };
+        /** JournalOut */
+        JournalOut: {
+            /** Entries */
+            entries: components["schemas"]["JournalEntryOut"][];
+            /** Nudges */
+            nudges: components["schemas"]["NudgeOut"][];
+        };
         /** LimitsOut */
         LimitsOut: {
             /** Max Position Pct */
@@ -453,6 +601,31 @@ export interface components {
             per_suggestion_max_pct: string | null;
             /** Drawdown Pause Pct */
             drawdown_pause_pct: string | null;
+        };
+        /** LimitsUpdateOut */
+        LimitsUpdateOut: {
+            limits: components["schemas"]["LimitsOut"];
+            /** Profile */
+            profile: string;
+            /** Loosened */
+            loosened: string[];
+        };
+        /** LimitsUpdateRequest */
+        LimitsUpdateRequest: {
+            /** Max Position Pct */
+            max_position_pct: string;
+            /** Max Asset Class Pct */
+            max_asset_class_pct: {
+                [key: string]: string;
+            };
+            /** Max Trades Per Week */
+            max_trades_per_week: number;
+            /** Cash Floor Pct */
+            cash_floor_pct: string;
+            /** Per Suggestion Max Pct */
+            per_suggestion_max_pct: string;
+            /** Drawdown Pause Pct */
+            drawdown_pause_pct: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -472,6 +645,65 @@ export interface components {
             email: string;
             /** Display Name */
             display_name: string;
+            /**
+             * Onboarded
+             * @default false
+             */
+            onboarded: boolean;
+        };
+        /** NotificationOut */
+        NotificationOut: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Created At */
+            created_at: string;
+            /** Read At */
+            read_at: string | null;
+        };
+        /** NudgeOut */
+        NudgeOut: {
+            /** Kind */
+            kind: string;
+            /** Severity */
+            severity: string;
+            /** Message */
+            message: string;
+        };
+        /** OnboardingOut */
+        OnboardingOut: {
+            /** Profile */
+            profile: string;
+            limits: components["schemas"]["LimitsOut"];
+            /** Onboarded */
+            onboarded: boolean;
+        };
+        /** OnboardingRequest */
+        OnboardingRequest: {
+            /** Experience */
+            experience: string;
+            /** Drop Reaction */
+            drop_reaction: string;
+            /** Goal */
+            goal: string;
+        };
+        /** OnboardingStatusOut */
+        OnboardingStatusOut: {
+            /** Onboarded */
+            onboarded: boolean;
+            /** Profiles */
+            profiles: {
+                [key: string]: components["schemas"]["LimitsOut"];
+            };
         };
         /** OrderOut */
         OrderOut: {
@@ -598,6 +830,15 @@ export interface components {
             password: string;
             /** Display Name */
             display_name: string;
+        };
+        /** ReviewOut */
+        ReviewOut: {
+            performance: components["schemas"]["PerformanceOut"];
+            trades: components["schemas"]["ClosedTradesOut"];
+            /** Verdict */
+            verdict: string;
+            /** Disclaimers */
+            disclaimers: string[];
         };
         /** SuggestionListOut */
         SuggestionListOut: {
@@ -848,6 +1089,41 @@ export interface operations {
             };
         };
     };
+    update_account_limits_account_limits_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LimitsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitsUpdateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     pause_account_account_pause_post: {
         parameters: {
             query?: never;
@@ -961,6 +1237,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PerformanceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    performance_review_portfolio_review_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewOut"];
                 };
             };
             /** @description Validation Error */
@@ -1303,6 +1612,203 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    onboarding_status_onboarding_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_onboarding_onboarding_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_digest_digest_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DigestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notifications_notifications_get: {
+        parameters: {
+            query?: {
+                unread_only?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_read_notifications__notification_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_journal_journal_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                alphadash_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JournalOut"];
                 };
             };
             /** @description Validation Error */

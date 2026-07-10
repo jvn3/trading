@@ -113,6 +113,12 @@ class JournalEntryType(enum.StrEnum):
     note = "note"
 
 
+class NotificationKind(enum.StrEnum):
+    digest = "digest"
+    nudge = "nudge"
+    risk = "risk"
+
+
 class AgentRunTrigger(enum.StrEnum):
     scheduled = "scheduled"
     event = "event"
@@ -148,6 +154,8 @@ class User(PkMixin, CreatedAtMixin, Base):
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     # S1.8: argon2 hash. Nullable so pre-auth rows (tests/fixtures) stay valid; login requires it.
     password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # S3.1: set when the guided onboarding interview completes; NULL = wizard not yet finished.
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AuthSession(PkMixin, CreatedAtMixin, Base):
@@ -353,6 +361,30 @@ class JournalEntry(PkMixin, CreatedAtMixin, Base):
     )
     ref_id: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Notifications (S3.2 schema extension)
+# ---------------------------------------------------------------------------
+
+
+class Notification(PkMixin, CreatedAtMixin, Base):
+    """In-app notification feed (S3.2): daily digests, behavioral nudges, risk alerts.
+
+    ``payload`` carries the structured content (e.g. the full digest document) so the frontend
+    renders from data, not from pre-baked HTML. ``read_at`` is the only mutable field.
+    """
+
+    __tablename__ = "notifications"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[NotificationKind] = mapped_column(
+        _enum(NotificationKind, "notification_kind"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # ---------------------------------------------------------------------------

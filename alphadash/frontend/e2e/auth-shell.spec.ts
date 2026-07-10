@@ -50,9 +50,21 @@ test("kill switch pauses (two-tap) and blocks buys, resume unblocks", async ({ p
   await expect(page.getByRole("button", { name: "Pause all" })).toBeVisible();
 });
 
-test("learn screen definition tooltips open", async ({ page }) => {
+test("learn screen shows the glossary and inline definitions open (S3.3)", async ({ page }) => {
   await register(page, uniqueEmail("learn"));
   await page.getByRole("navigation", { name: "Primary" }).getByText("Learn").click();
-  await page.getByRole("button", { name: "Drawdown" }).click();
+
+  // Full glossary is rendered
+  await expect(page.getByRole("heading", { name: "Glossary" })).toBeVisible();
+  await expect(page.getByText("drawdown", { exact: true })).toBeVisible();
+  await expect(page.getByText(/flight simulator of investing/)).toBeVisible();
+
+  // Inline definition tooltip opens
+  await page.getByRole("button", { name: "underlined term" }).click();
+  await expect(page.getByRole("note")).toContainText("plain-English definition");
+
+  // Same glossary term, different screen: drawdown on the portfolio review card
+  await page.getByRole("navigation", { name: "Primary" }).getByText("Portfolio").click();
+  await page.getByRole("button", { name: "drawdown" }).first().click();
   await expect(page.getByRole("note")).toContainText("highest point");
 });
